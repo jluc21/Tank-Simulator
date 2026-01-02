@@ -1,34 +1,28 @@
 "use client";
 import { useState, useEffect } from 'react';
 
-// --- THE FALLBACK 60 (Used while loading or if API fails) ---
+// --- FALLBACK DATA (Accurate 2026 Start) ---
+// This displays immediately while the "Daily Update" API runs in the background.
 const FALLBACK_PLAYERS = [
-  { rank: 1, name: "Darryn Peterson", team: "Kansas", pos: "G", stats: "19.3 PPG", img: "" },
-  { rank: 2, name: "Cameron Boozer", team: "Duke", pos: "PF", stats: "22.1 PPG", img: "" },
-  { rank: 3, name: "AJ Dybantsa", team: "BYU", pos: "SF", stats: "23.1 PPG", img: "" },
-  { rank: 4, name: "Caleb Wilson", team: "UNC", pos: "PF", stats: "21.7 PPG", img: "" },
-  { rank: 5, name: "Nate Ament", team: "Tennessee", pos: "SF", stats: "18.9 PPG", img: "" },
-  { rank: 6, name: "Kingston Flemings", team: "Houston", pos: "PG", stats: "20.4 PPG", img: "" },
-  { rank: 7, name: "Mikel Brown Jr.", team: "Louisville", pos: "PG", stats: "14.9 PPG", img: "" },
-  { rank: 8, name: "Braylon Mullins", team: "UConn", pos: "SG", stats: "17.0 PPG", img: "" },
-  { rank: 9, name: "Koa Peat", team: "Arizona", pos: "PF", stats: "18.0 PPG", img: "" },
-  { rank: 10, name: "Tounde Yessoufou", team: "Baylor", pos: "SF", stats: "23.7 PPG", img: "" },
-  { rank: 11, name: "Jayden Quaintance", team: "Arizona St", pos: "C", stats: "11.2 PPG", img: "" },
-  { rank: 12, name: "Labaron Philon", team: "Alabama", pos: "PG", stats: "15.5 PPG", img: "" },
-  { rank: 13, name: "Darius Acuff", team: "Arkansas", pos: "PG", stats: "16.2 PPG", img: "" },
-  { rank: 14, name: "Yaxel Lendeborg", team: "Michigan", pos: "PF", stats: "21.0 PPG", img: "" },
-  { rank: 15, name: "Isaiah Evans", team: "Duke", pos: "SF", stats: "12.4 PPG", img: "" },
-  { rank: 16, name: "Ebuka Okorie", team: "Stanford", pos: "SF", stats: "22.8 PPG", img: "" },
-  { rank: 17, name: "JT Toppin", team: "Texas Tech", pos: "PF", stats: "18.2 PPG", img: "" },
-  { rank: 18, name: "Bennett Stirtz", team: "Iowa", pos: "PG", stats: "14.5 PPG", img: "" },
-  { rank: 19, name: "Chris Cenac", team: "Houston", pos: "C", stats: "10.1 PPG", img: "" },
-  { rank: 20, name: "Tahaad Pettiford", team: "Auburn", pos: "PG", stats: "11.5 PPG", img: "" },
-  // ... (The list creates space for the API to fill in)
+  { rank: 1, name: "Darryn Peterson", team: "Kansas", pos: "G", stats: "19.3 PPG", img: "https://s3media.247sports.com/Uploads/Assets/669/138/12138669.jpg?fit=bounds&crop=150:200,offset-y0.50&width=150&height=200" },
+  { rank: 2, name: "Cameron Boozer", team: "Duke", pos: "PF", stats: "22.1 PPG", img: "https://s3media.247sports.com/Uploads/Assets/428/967/11967428.jpg?fit=bounds&crop=150:200,offset-y0.50&width=150&height=200" },
+  { rank: 3, name: "AJ Dybantsa", team: "BYU", pos: "SF", stats: "23.1 PPG", img: "https://s3media.247sports.com/Uploads/Assets/822/283/12283822.jpg?fit=bounds&crop=150:200,offset-y0.50&width=150&height=200" },
+  { rank: 4, name: "Caleb Wilson", team: "UNC", pos: "PF", stats: "21.7 PPG", img: "https://s3media.247sports.com/Uploads/Assets/325/71/12071325.jpg?fit=bounds&crop=150:200,offset-y0.50&width=150&height=200" },
+  { rank: 5, name: "Nate Ament", team: "Tennessee", pos: "SF", stats: "18.9 PPG", img: "https://s3media.247sports.com/Uploads/Assets/564/252/12252564.jpg?fit=bounds&crop=150:200,offset-y0.50&width=150&height=200" },
+  { rank: 6, name: "Kingston Flemings", team: "Houston", pos: "PG", stats: "20.4 PPG", img: "https://s3media.247sports.com/Uploads/Assets/839/840/11840839.jpg?fit=bounds&crop=150:200,offset-y0.50&width=150&height=200" },
+  { rank: 7, name: "Mikel Brown Jr.", team: "Louisville", pos: "PG", stats: "14.9 PPG", img: "https://s3media.247sports.com/Uploads/Assets/349/335/12335349.jpg?fit=bounds&crop=150:200,offset-y0.50&width=150&height=200" },
+  { rank: 8, name: "Braylon Mullins", team: "UConn", pos: "SG", stats: "17.0 PPG", img: "https://s3media.247sports.com/Uploads/Assets/693/178/12178693.jpg?fit=bounds&crop=150:200,offset-y0.50&width=150&height=200" },
+  { rank: 9, name: "Koa Peat", team: "Arizona", pos: "PF", stats: "18.0 PPG", img: "https://s3media.247sports.com/Uploads/Assets/751/66/12066751.jpg?fit=bounds&crop=150:200,offset-y0.50&width=150&height=200" },
+  { rank: 10, name: "Tounde Yessoufou", team: "Baylor", pos: "SF", stats: "23.7 PPG", img: "https://s3media.247sports.com/Uploads/Assets/479/931/11931479.jpg?fit=bounds&crop=150:200,offset-y0.50&width=150&height=200" },
+  { rank: 11, name: "Jayden Quaintance", team: "Arizona St", pos: "C", stats: "11.2 PPG", img: "https://s3media.247sports.com/Uploads/Assets/985/904/11904985.jpg?fit=bounds&crop=150:200,offset-y0.50&width=150&height=200" },
+  { rank: 12, name: "Labaron Philon", team: "Alabama", pos: "PG", stats: "15.5 PPG", img: "https://s3media.247sports.com/Uploads/Assets/855/123/12123855.jpg?fit=bounds&crop=150:200,offset-y0.50&width=150&height=200" },
+  { rank: 13, name: "Darius Acuff", team: "Arkansas", pos: "PG", stats: "16.2 PPG", img: "https://s3media.247sports.com/Uploads/Assets/554/474/11474554.jpg?fit=bounds&crop=150:200,offset-y0.50&width=150&height=200" },
+  { rank: 14, name: "Yaxel Lendeborg", team: "Michigan", pos: "PF", stats: "21.0 PPG", img: "https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png" },
 ];
 
 export default function BigBoardPage() {
   const [players, setPlayers] = useState(FALLBACK_PLAYERS);
-  const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState("Loading live stats...");
 
   useEffect(() => {
     async function fetchLiveStats() {
@@ -37,24 +31,19 @@ export default function BigBoardPage() {
         const liveData = await res.json();
         
         if (liveData && liveData.length > 0) {
-          // Merge API data (Images/HT/WT) into our rankings
-          // We map through a generated list of 60 slots
-          const bigBoard = liveData.map((livePlayer, index) => ({
-             rank: index + 1,
-             name: livePlayer.name,
-             team: livePlayer.team,
-             pos: livePlayer.pos,
-             ht: livePlayer.ht,
-             wt: livePlayer.wt,
-             img: livePlayer.img,
-             stats: "Live Roster" // In a real full app, we'd do a 2nd fetch for exact PPG
-          }));
-          setPlayers(bigBoard);
+          // Merge Live stats with our list
+          // We keep the Manual Rank order but update the stats/images
+          const updated = FALLBACK_PLAYERS.map(p => {
+            const live = liveData.find(l => l.name === p.name);
+            return live ? { ...p, stats: live.stats, img: live.img, pos: live.pos } : p;
+          });
+          
+          setPlayers(updated);
+          setLastUpdated("Live Updates • 2025-26 Season");
         }
-        setLoading(false);
       } catch (error) {
         console.error("Using fallback data...", error);
-        setLoading(false);
+        setLastUpdated("Offline Mode • 2026 Projections");
       }
     }
     fetchLiveStats();
@@ -62,15 +51,18 @@ export default function BigBoardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 text-black font-sans pb-20">
+      
+      {/* HEADER */}
       <div className="border-b-4 border-orange-500 bg-white pt-8 pb-4 px-4 text-center sticky top-0 z-40 shadow-sm">
         <h1 className="text-3xl md:text-5xl font-light text-gray-800 tracking-tight">
           2026 NBA Draft <span className="font-bold">Big Board</span>
         </h1>
-        <p className="text-gray-500 text-xs md:text-sm mt-2 uppercase tracking-widest font-semibold">
-          Top 60 Prospects • Live 2025-26 Season Data
+        <p className="text-gray-500 text-xs md:text-sm mt-2 uppercase tracking-widest font-semibold animate-pulse">
+          {lastUpdated}
         </p>
       </div>
 
+      {/* TABLE */}
       <div className="max-w-7xl mx-auto px-2 md:px-4 mt-8">
         <div className="bg-orange-600 text-white text-center py-2 font-bold text-sm uppercase tracking-widest rounded-t shadow-md">
           Consensus Rankings
@@ -82,7 +74,7 @@ export default function BigBoardPage() {
                 
                 {/* RANK */}
                 <div className="w-12 md:w-16 text-center text-3xl md:text-4xl font-light text-gray-300 font-mono">
-                  {index + 1}
+                  {player.rank}
                 </div>
 
                 {/* IMAGE */}
@@ -106,16 +98,13 @@ export default function BigBoardPage() {
                    </div>
                 </div>
 
-                {/* PHYSICALS */}
-                <div className="w-full md:w-32 text-center md:text-left hidden md:block">
-                   <div className="text-sm font-semibold text-gray-700">{player.ht}</div>
-                   <div className="text-xs text-gray-400">{player.wt}</div>
-                </div>
-
-                {/* STATS */}
+                {/* STATS (Dynamic) */}
                 <div className="w-full md:w-48 text-center md:text-right pr-0 md:pr-6">
-                   <div className="text-sm md:text-base font-bold text-gray-900 bg-green-50 inline-block md:block px-2 py-1 rounded border border-green-100">
-                     {player.stats || "Live Roster"}
+                   <div className="text-base font-bold text-green-600">
+                     {player.stats.split(',')[0]}
+                   </div>
+                   <div className="text-xs text-gray-400 font-medium">
+                     {player.stats.split(',')[1] || ""}
                    </div>
                 </div>
 
@@ -125,7 +114,7 @@ export default function BigBoardPage() {
         
         <div className="text-center py-8">
            <button className="bg-gray-800 text-white px-8 py-3 rounded-full font-bold uppercase tracking-widest hover:bg-black transition-all shadow-lg text-xs">
-             Load More Prospects
+             Load 60+ Prospects
            </button>
         </div>
       </div>
