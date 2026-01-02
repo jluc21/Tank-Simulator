@@ -18,8 +18,9 @@ export default function RootLayout({ children }) {
               TANK<span className="text-emerald-500">SIM</span>
             </div>
             <div className="flex gap-6 text-sm font-bold uppercase tracking-wide">
+              {/* UPDATED LINK NAME HERE */}
               <Link href="/" className="text-gray-400 hover:text-white transition-colors">
-                Standings
+                Lotto Odds
               </Link>
               <Link href="/mock-draft" className="text-gray-400 hover:text-white transition-colors">
                 Mock Draft
