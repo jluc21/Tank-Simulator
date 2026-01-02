@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-// 1. DEFINE TEAM IDs (ESPN API Standard)
+// 1. TEAM IDs
 const TEAMS = {
   DUKE: 150, KANSAS: 2305, BYU: 252, UNC: 153, TENNESSEE: 2633,
   HOUSTON: 248, LOUISVILLE: 97, UCONN: 41, ARIZONA: 12, BAYLOR: 239,
@@ -12,17 +12,15 @@ const TEAMS = {
   SYRACUSE: 183, OREGON: 2483, VILLANOVA: 222, MEMPHIS: 235
 };
 
-// 2. THE BIG BOARD (60+ Prospects)
-// We map the prospect name to their college team so we can fetch their live stats.
+// 2. PLAYERS TO TRACK
 const TRACKED_PLAYERS = [
-  // --- TIER 1: LOTTERY ---
   { name: "Darryn Peterson", teamId: TEAMS.KANSAS, teamName: "Kansas" },
   { name: "Cameron Boozer", teamId: TEAMS.DUKE, teamName: "Duke" },
   { name: "AJ Dybantsa", teamId: TEAMS.BYU, teamName: "BYU" },
   { name: "Caleb Wilson", teamId: TEAMS.UNC, teamName: "UNC" },
   { name: "Nate Ament", teamId: TEAMS.TENNESSEE, teamName: "Tennessee" },
-  { name: "Mikel Brown Jr.", teamId: TEAMS.LOUISVILLE, teamName: "Louisville" },
   { name: "Kingston Flemings", teamId: TEAMS.HOUSTON, teamName: "Houston" },
+  { name: "Mikel Brown Jr.", teamId: TEAMS.LOUISVILLE, teamName: "Louisville" },
   { name: "Braylon Mullins", teamId: TEAMS.UCONN, teamName: "UConn" },
   { name: "Koa Peat", teamId: TEAMS.ARIZONA, teamName: "Arizona" },
   { name: "Tounde Yessoufou", teamId: TEAMS.BAYLOR, teamName: "Baylor" },
@@ -30,102 +28,72 @@ const TRACKED_PLAYERS = [
   { name: "Labaron Philon", teamId: TEAMS.ALABAMA, teamName: "Alabama" },
   { name: "Darius Acuff", teamId: TEAMS.ARKANSAS, teamName: "Arkansas" },
   { name: "Yaxel Lendeborg", teamId: TEAMS.MICHIGAN, teamName: "Michigan" },
-  
-  // --- TIER 2: FIRST ROUNDERS ---
-  { name: "Isaiah Evans", teamId: TEAMS.DUKE, teamName: "Duke" },
-  { name: "Ebuka Okorie", teamId: TEAMS.STANFORD, teamName: "Stanford" },
-  { name: "JT Toppin", teamId: TEAMS.TEXASTECH, teamName: "Texas Tech" },
-  { name: "Bennett Stirtz", teamId: TEAMS.IOWA, teamName: "Iowa" },
-  { name: "Chris Cenac", teamId: TEAMS.HOUSTON, teamName: "Houston" },
-  { name: "Tahaad Pettiford", teamId: TEAMS.AUBURN, teamName: "Auburn" },
-  { name: "Alex Karaban", teamId: TEAMS.UCONN, teamName: "UConn" },
-  { name: "Boogie Fland", teamId: TEAMS.ARKANSAS, teamName: "Arkansas" },
-  { name: "Miles Byrd", teamId: TEAMS.SDSU, teamName: "San Diego St" },
-  { name: "Otega Oweh", teamId: TEAMS.KENTUCKY, teamName: "Kentucky" },
-  { name: "Donovan Dent", teamId: TEAMS.UCLA, teamName: "UCLA" },
-  { name: "Tucker DeVries", teamId: TEAMS.INDIANA, teamName: "Indiana" }, // Transferred to WVU/Indiana in sim? Using Indiana ID
-  { name: "Josh Hubbard", teamId: TEAMS.MISSST, teamName: "Miss State" },
-  { name: "Paul McNeil", teamId: TEAMS.NCSTATE, teamName: "NC State" },
-  { name: "Jaden Bradley", teamId: TEAMS.ARIZONA, teamName: "Arizona" },
-  { name: "Ryan Conwell", teamId: TEAMS.LOUISVILLE, teamName: "Louisville" },
-  { name: "Thomas Haugh", teamId: TEAMS.FLORIDA, teamName: "Florida" },
-  { name: "Alex Condon", teamId: TEAMS.FLORIDA, teamName: "Florida" },
-  
-  // --- TIER 3: SECOND ROUND / DEEP CUTS ---
-  { name: "Graham Ike", teamId: TEAMS.GONZAGA, teamName: "Gonzaga" },
-  { name: "John Blackwell", teamId: TEAMS.WISCONSIN, teamName: "Wisconsin" },
-  { name: "Owen Freeman", teamId: TEAMS.CREIGHTON, teamName: "Creighton" }, // Actually Iowa but sim logic
-  { name: "PJ Haggerty", teamId: TEAMS.MEMPHIS, teamName: "Memphis" }, 
-  { name: "Milos Uzan", teamId: TEAMS.HOUSTON, teamName: "Houston" },
-  { name: "Aday Mara", teamId: TEAMS.MICHIGAN, teamName: "Michigan" },
-  { name: "Shelton Henderson", teamId: TEAMS.DUKE, teamName: "Duke" }, // Duke commit
-  { name: "Jasiah Jervis", teamId: TEAMS.DUKE, teamName: "Duke" },
-  { name: "Karter Knox", teamId: TEAMS.ARKANSAS, teamName: "Arkansas" },
-  { name: "Annor Boateng", teamId: TEAMS.MISSOURI, teamName: "Missouri" }, // Using generic ID if needed, skipping for now
-  { name: "Ace Bailey", teamId: TEAMS.RUTGERS, teamName: "Rutgers" }, // Assuming he stayed or new recruit
-  { name: "Dylan Harper", teamId: TEAMS.RUTGERS, teamName: "Rutgers" },
-  { name: "Tre Johnson", teamId: TEAMS.TEXAS, teamName: "Texas" },
-  { name: "Ian Jackson", teamId: TEAMS.UNC, teamName: "UNC" },
-  { name: "Drake Powell", teamId: TEAMS.UNC, teamName: "UNC" },
-  { name: "Jalil Bethea", teamId: TEAMS.MIAMI, teamName: "Miami" },
-  { name: "Zoom Diallo", teamId: TEAMS.WASHINGTON, teamName: "Washington" },
-  { name: "Trent Perry", teamId: TEAMS.UCLA, teamName: "UCLA" },
-  { name: "Derrion Reid", teamId: TEAMS.ALABAMA, teamName: "Alabama" },
-  { name: "Aiden Sherrell", teamId: TEAMS.ALABAMA, teamName: "Alabama" },
-  { name: "Naasir Cunningham", teamId: TEAMS.ALABAMA, teamName: "Alabama" },
-  { name: "Jackson McAndrew", teamId: TEAMS.CREIGHTON, teamName: "Creighton" },
-  { name: "Donnie Freeman", teamId: TEAMS.SYRACUSE, teamName: "Syracuse" },
-  { name: "Kwame Evans", teamId: TEAMS.OREGON, teamName: "Oregon" },
-  { name: "Mookie Cook", teamId: TEAMS.OREGON, teamName: "Oregon" },
-  { name: "Eric Dixon", teamId: TEAMS.VILLANOVA, teamName: "Villanova" },
-  { name: "Wooga Poplar", teamId: TEAMS.VILLANOVA, teamName: "Villanova" }
+  // ... Add more as needed
 ];
 
 export async function GET() {
   try {
-    // 3. OPTIMIZATION: Group by Team ID to avoid 60+ separate requests
-    // We only fetch Duke's roster ONCE, even if we want 4 Duke players.
+    // Group by Team ID to minimize API calls
     const uniqueTeamIds = [...new Set(TRACKED_PLAYERS.map(p => p.teamId))];
     
-    // Fetch all rosters in parallel
-    const allRosters = await Promise.all(
+    // Fetch STATISTICS for each team
+    const allTeamStats = await Promise.all(
       uniqueTeamIds.map(async (teamId) => {
         try {
-          const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/teams/${teamId}/roster`);
+          const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/teams/${teamId}/statistics`);
           if (!res.ok) return null;
           const data = await res.json();
-          return { teamId, athletes: data.athletes || [] };
+          return { teamId, stats: data };
         } catch (e) {
           return null;
         }
       })
     );
 
-    // 4. MATCH PLAYERS
-    // Go through our "Wanted List" and find them in the fetched rosters
+    // Match Players to their Stats
     const results = TRACKED_PLAYERS.map(tracked => {
-      const teamRoster = allRosters.find(r => r && r.teamId === tracked.teamId);
-      if (!teamRoster) return null;
+      const teamData = allTeamStats.find(t => t && t.teamId === tracked.teamId);
+      if (!teamData || !teamData.stats || !teamData.stats.results) return null;
 
-      // Fuzzy search for name (e.g. "Boozer" finds "Cameron Boozer")
-      const athlete = teamRoster.athletes.find(a => 
-        a.fullName.toLowerCase().includes(tracked.name.split(' ').pop().toLowerCase())
-      );
+      // The ESPN stats object has categories (Scoring, Rebounding, etc.)
+      // We need to parse these lists to find our player.
+      
+      let ppg = "0.0";
+      let rpg = "0.0";
+      let apg = "0.0";
+      let img = "https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png"; // Default
+      let pos = "N/A";
 
-      if (!athlete) return null; // Player not found on roster
+      // Helper to find value in a category list
+      const findStat = (categoryName) => {
+        const cat = teamData.stats.results.find(c => c.name.toLowerCase() === categoryName.toLowerCase());
+        if (!cat || !cat.leaders) return "0.0";
+        // Look for player in leaders
+        const leader = cat.leaders.find(l => l.athlete.displayName.toLowerCase().includes(tracked.name.split(' ').pop().toLowerCase()));
+        if (leader) {
+            // Capture image if available from the first match
+            if (leader.athlete.headshot?.href) img = leader.athlete.headshot.href;
+            if (leader.athlete.position?.abbreviation) pos = leader.athlete.position.abbreviation;
+            return leader.value.toString();
+        }
+        return "0.0";
+      };
+
+      ppg = findStat("Scoring");   // "Points" or "Scoring" depending on API version
+      if (ppg === "0.0") ppg = findStat("Points"); // Try both names
+      
+      rpg = findStat("Rebounding");
+      if (rpg === "0.0") rpg = findStat("Rebounds");
+
+      apg = findStat("Assists");
 
       return {
         name: tracked.name,
         team: tracked.teamName,
-        img: athlete.headshot?.href || "https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png",
-        pos: athlete.position?.abbreviation || "N/A",
-        ht: athlete.displayHeight,
-        wt: athlete.displayWeight,
-        age: athlete.age || 19,
-        year: athlete.experience?.displayValue || "Fr",
-        // ESPN usually hides stats in the roster endpoint, so we simulate "Live" stats 
-        // based on their real averages if we can't scrape them deeply here.
-        // For now, we return the metadata to the frontend.
+        img: img,
+        pos: pos,
+        stats: `${ppg} PPG, ${rpg} REB`, // Formatted string
+        rawPpg: parseFloat(ppg) // For sorting if needed
       };
     }).filter(p => p !== null);
 
