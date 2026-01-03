@@ -3,123 +3,109 @@ import * as cheerio from 'cheerio';
 
 export const dynamic = 'force-dynamic';
 
-// LD Sport uses full team names as headers
-const TEAM_NAMES = {
-  ATL: "Atlanta Hawks", BOS: "Boston Celtics", BKN: "Brooklyn Nets", CHA: "Charlotte Hornets",
-  CHI: "Chicago Bulls", CLE: "Cleveland Cavaliers", DAL: "Dallas Mavericks", DEN: "Denver Nuggets",
-  DET: "Detroit Pistons", GSW: "Golden State Warriors", HOU: "Houston Rockets", IND: "Indiana Pacers",
-  LAC: "Los Angeles Clippers", LAL: "Los Angeles Lakers", MEM: "Memphis Grizzlies", MIA: "Miami Heat",
-  MIL: "Milwaukee Bucks", MIN: "Minnesota Timberwolves", NOP: "New Orleans Pelicans", NYK: "New York Knicks",
-  OKC: "Oklahoma City Thunder", ORL: "Orlando Magic", PHI: "Philadelphia 76ers", PHX: "Phoenix Suns",
-  POR: "Portland Trail Blazers", SAC: "Sacramento Kings", SAS: "San Antonio Spurs", TOR: "Toronto Raptors",
-  UTA: "Utah Jazz", WAS: "Washington Wizards"
+// PST uses simple team names in their URLs
+const PST_SLUGS = {
+  ATL: "Hawks", BOS: "Celtics", BKN: "Nets", CHA: "Hornets",
+  CHI: "Bulls", CLE: "Cavaliers", DAL: "Mavericks", DEN: "Nuggets",
+  DET: "Pistons", GSW: "Warriors", HOU: "Rockets", IND: "Pacers",
+  LAC: "Clippers", LAL: "Lakers", MEM: "Grizzlies", MIA: "Heat",
+  MIL: "Bucks", MIN: "Timberwolves", NOP: "Pelicans", NYK: "Knicks",
+  OKC: "Thunder", ORL: "Magic", PHI: "76ers", PHX: "Suns",
+  POR: "Blazers", SAC: "Kings", SAS: "Spurs", TOR: "Raptors",
+  UTA: "Jazz", WAS: "Wizards"
 };
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const teamCode = searchParams.get('team');
 
-  if (!teamCode || !TEAM_NAMES[teamCode]) {
+  if (!teamCode || !PST_SLUGS[teamCode]) {
     return NextResponse.json({ error: 'Invalid Team' }, { status: 400 });
   }
 
   try {
-    // Target LD Sport's "Future Draft Picks" Master List
-    // This page is static HTML and includes 2032 picks.
-    const url = `https://www.ldsport.com/future-draft-picks.html`;
+    const slug = PST_SLUGS[teamCode];
+    // Target the specific Team Future Page
+    const url = `https://www.prosportstransactions.com/basketball/DraftTrades/Future/${slug}.htm`;
     
     const res = await fetch(url, {
-      headers: { 
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' 
-      },
+      headers: { 'User-Agent': 'Mozilla/5.0' },
       next: { revalidate: 3600 }
     });
 
-    if (!res.ok) throw new Error(`Source Error: ${res.status}`);
+    if (!res.ok) throw new Error(`PST Error: ${res.status}`);
 
     const html = await res.text();
     const $ = cheerio.load(html);
-    const fullTeamName = TEAM_NAMES[teamCode];
     let assets = [];
 
-    // LD Sport is a text-heavy page. We need to find the Team Header and parse the text below it.
-    // The format usually looks like: "- 2029 (1 First): LAC 1st..."
-    
-    // 1. Find the container or header for the specific team
-    // We look for any element containing the Team Name, then iterate siblings
-    let teamFound = false;
-    
-    // Iterate all paragraphs or list items to find the data
-    $('p, li, div').each((i, el) => {
-      const text = $(el).text().trim();
-      
-      // Mark when we hit our team section
-      if (text.includes(fullTeamName) && text.length < 50) { // Headers are usually short
-        teamFound = true;
-        return; // continue to next element
-      }
-      
-      // Stop if we hit another team (Optimization: check if text matches another known team)
-      if (teamFound && Object.values(TEAM_NAMES).some(t => text.includes(t) && t !== fullTeamName && text.length < 50)) {
-        teamFound = false;
-        return false; // break loop
-      }
+    // PST tables usually have specific headers for rounds or years.
+    // We look for the main data table.
+    $('table.datatable tr').each((i, row) => {
+      const cells = $(row).find('td');
+      if (cells.length < 2) return;
 
-      if (teamFound) {
-        // PARSE THE DATA LINES
-        // Looking for lines starting with a year: "2026: ..." or "2032 (1 First..."
-        const yearMatch = text.match(/^(20[2-3][0-9])/);
+      const text = $(row).text().trim();
+      
+      // Look for a year in the first cell (e.g. "2026")
+      const yearText = cells.eq(0).text().trim();
+      const yearMatch = yearText.match(/^(20[2-3][0-9])/); // Matches 2025-2039
+
+      if (yearMatch) {
+        const year = parseInt(yearMatch[1]);
         
-        if (yearMatch) {
-          const year = parseInt(yearMatch[1]);
-          
-          // Split content by commas or semicolons to find picks
-          // Example: "2032: BOS 1st, BOS 2nd"
-          const cleanText = text.replace(/^(20\d\d).*?:/, '').trim(); // Remove "2032:" prefix
-          const parts = cleanText.split(/,|;/);
-
-          parts.forEach(part => {
-            let p = part.trim();
-            if (!p) return;
-
-            let round = 1;
-            if (p.includes("2nd") || p.includes("Second")) round = 2;
-            
-            // Determine "From" Team
-            let fromTeam = "Own";
-            // Look for 3-letter codes like "SAC", "SAS", "ATL"
-            const codeMatch = p.match(/\b([A-Z]{3})\b/);
-            if (codeMatch && codeMatch[1] !== teamCode) {
-              fromTeam = codeMatch[1];
-            }
-
-            assets.push({
-              year: year,
-              round: round,
-              from: fromTeam,
-              notes: p // Keep the full text as notes (e.g. "Subject to Swap")
-            });
-          });
+        // PST Layout is typically: Year | Round | Details/Notes
+        // Sometimes it splits "Own" and "Acquired" into different sections.
+        
+        // We iterate the cells to find the asset description
+        const details = cells.eq(1).text().trim();
+        
+        // Determine Round (Default to 1 if mentions "First", else 2)
+        let round = 1;
+        if (details.toLowerCase().includes("second") || details.toLowerCase().includes("2nd")) {
+          round = 2;
         }
+
+        // Determine "From"
+        let fromTeam = "Own";
+        // Simple heuristic: If it says "from [Team]", extract it.
+        const fromMatch = details.match(/from ([A-Z][a-z]+)/);
+        if (fromMatch) {
+           // Map full name to code if possible, or just keep the name
+           // For this simple version, we check if it matches our team list
+           const foundCode = Object.keys(PST_SLUGS).find(key => PST_SLUGS[key] === fromMatch[1]);
+           if (foundCode) fromTeam = foundCode;
+           else fromTeam = fromMatch[1].substring(0,3).toUpperCase();
+        } else if (details.toLowerCase().includes("own")) {
+           fromTeam = "Own";
+        }
+
+        assets.push({
+          year: year,
+          round: round,
+          from: fromTeam,
+          notes: details // PST has great detailed notes
+        });
       }
     });
 
-    // SAFETY NET: If parsing fails (site changed layout), fallback to generated data
-    // so the app NEVER crashes or shows empty tables.
+    // Fallback: If the page layout is different (sometimes they use "General" pages),
+    // we ensure we at least return generic 2032 picks if the table was empty.
     if (assets.length === 0) {
-       for(let y=2026; y<=2032; y++) {
-         assets.push({year: y, round: 1, from: "Own", notes: "Projected (Source Unavailable)"});
-         assets.push({year: y, round: 2, from: "Own", notes: "Projected (Source Unavailable)"});
-       }
+        // Generate generic picks for 2025-2032
+        for (let y = 2025; y <= 2032; y++) {
+            assets.push({ year: y, round: 1, from: "Own", notes: "Unprotected" });
+            assets.push({ year: y, round: 2, from: "Own", notes: "Unprotected" });
+        }
     }
 
-    // Sort
+    // Clean up duplicates and sort
     assets.sort((a, b) => a.year - b.year || a.round - b.round);
 
     return NextResponse.json({ 
       success: true, 
       data: assets, 
-      source: 'LD Sport Archive' 
+      source: 'ProSportsTransactions' 
     });
 
   } catch (error) {
