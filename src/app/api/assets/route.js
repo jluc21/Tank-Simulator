@@ -3,8 +3,7 @@ import * as cheerio from 'cheerio';
 
 export const dynamic = 'force-dynamic';
 
-// 1. The Official Alphabetical ID Map
-// Validated: SAS is indeed 27.
+// 1. Validated ID Map (SAS = 27)
 const TEAM_IDS = {
   ATL: { id: 1, slug: "atlanta-hawks" },
   BOS: { id: 2, slug: "boston-celtics" },
@@ -39,77 +38,73 @@ const TEAM_IDS = {
 };
 
 export async function GET(request) {
-  // 1. Get the requested team (e.g., ?team=SAC)
   const { searchParams } = new URL(request.url);
   const teamCode = searchParams.get('team');
 
-  // Validate Team Code
+  // Validate Request
   if (!teamCode || !TEAM_IDS[teamCode]) {
-    return NextResponse.json({ error: 'Invalid Team Code' }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'Invalid Team Code' }, { status: 400 });
   }
 
   const team = TEAM_IDS[teamCode];
   const url = `https://fanspo.com/nba/teams/${team.slug}/${team.id}/draft-picks`;
 
   try {
-    // 2. Fetch the HTML Page
     const res = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       },
-      next: { revalidate: 3600 } // Cache for 1 hour
+      next: { revalidate: 3600 }
     });
 
-    if (!res.ok) throw new Error(`Fanspo Error: ${res.status}`);
+    if (!res.ok) {
+        throw new Error(`Fanspo responded with ${res.status}`);
+    }
 
     const html = await res.text();
     const $ = cheerio.load(html);
     const picks = [];
 
-    // 3. Parse the HTML Table (The reliable method)
-    // We target the table rows directly.
+    // --- HTML TABLE PARSING ---
     $('table tbody tr').each((i, row) => {
       const cols = $(row).find('td');
-
-      // We need at least 5 columns: [Year, Round, PickNum, From, Notes]
+      
+      // Ensure row has enough columns (Year, Round, Pick, From, Notes)
       if (cols.length >= 5) {
         const yearTxt = $(cols[0]).text().trim();
         const year = parseInt(yearTxt);
 
         // Filter: Valid future year (2025+)
         if (!isNaN(year) && year >= 2025) {
-          const round = $(cols[1]).text().trim();
-          // Pick number might be "-" or a number
-          const pickNumStr = $(cols[2]).text().trim();
-          const pickNum = pickNumStr === '-' ? null : pickNumStr;
-          
-          const from = $(cols[3]).text().trim();
-          
-          // Notes often contain "Protected 1-14", simplify it
-          let notes = $(cols[4]).text().trim();
-          notes = notes.replace("Protected ", "Prot ").replace(/[\n\r]+/g, " ");
+            const round = $(cols[1]).text().trim();
+            const pickNumStr = $(cols[2]).text().trim();
+            const from = $(cols[3]).text().trim();
+            let notes = $(cols[4]).text().trim();
 
-          picks.push({
-            year,
-            round,
-            from,
-            notes
-          });
+            // Clean text
+            notes = notes.replace("Protected ", "Prot ").replace(/[\n\r]+/g, " ");
+
+            picks.push({
+                year: year,
+                round: round,
+                from: from, // Used to distinguish between 'Own' and Traded picks
+                notes: notes
+            });
         }
       }
     });
 
-    // 4. Sort and Return
     picks.sort((a, b) => a.year - b.year || a.round - b.round);
 
+    // Return with success: true (Critical for your frontend)
     return NextResponse.json({
-      team: teamCode,
-      source: 'Fanspo',
-      data: picks
+      success: true,
+      data: picks,
+      source: 'Fanspo Scraper'
     });
 
   } catch (error) {
-    console.error(`Scrape error for ${teamCode}:`, error);
-    return NextResponse.json({ error: 'Failed to fetch picks' }, { status: 500 });
+    console.error(`Scrape Error [${teamCode}]:`, error);
+    return NextResponse.json({ success: false, error: 'Failed to fetch draft data' }, { status: 500 });
   }
 }
