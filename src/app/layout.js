@@ -27,6 +27,9 @@ export default function RootLayout({ children }) {
               <Link href="/big-board" className="text-gray-400 hover:text-white transition-colors">
                 Big Board
               </Link>
+              <Link href="/picks" className="text-gray-400 hover:text-white transition-colors">
+                Team Assets
+              </Link>
               <Link href="/mock-draft" className="text-gray-400 hover:text-white transition-colors">
                 Mock Draft
               </Link>
