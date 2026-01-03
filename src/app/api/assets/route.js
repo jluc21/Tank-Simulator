@@ -3,8 +3,7 @@ import * as cheerio from 'cheerio';
 
 export const dynamic = 'force-dynamic';
 
-// 1. The "Alphabetical" 1-30 ID List
-// This is much faster than scraping the directory every time.
+// 1. The ID List (Maps your dropdown codes to Fanspo IDs)
 const TEAM_IDS = {
   ATL: { id: 1, slug: "atlanta-hawks" },
   BOS: { id: 2, slug: "boston-celtics" },
@@ -59,46 +58,55 @@ function findPicksInJSON(obj) {
   return null;
 }
 
-// 3. Worker Function for a Single Team
-async function fetchTeamPicks(teamCode) {
+export async function GET(request) {
+  // 1. READ THE QUERY PARAM (e.g., ?team=SAC)
+  const { searchParams } = new URL(request.url);
+  const teamCode = searchParams.get('team');
+
+  // If no team is selected, return an error or an empty state
+  if (!teamCode || !TEAM_IDS[teamCode]) {
+    return NextResponse.json({ error: 'Please select a valid team code (e.g. ?team=SAC)' }, { status: 400 });
+  }
+
   const team = TEAM_IDS[teamCode];
   const url = `https://fanspo.com/nba/teams/${team.slug}/${team.id}/draft-picks`;
-  
+
   try {
+    // 2. Fetch only the ONE requested team
     const res = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
       next: { revalidate: 3600 } // Cache for 1 hour
     });
 
-    if (!res.ok) return { team: teamCode, error: `Status ${res.status}` };
+    if (!res.ok) throw new Error(`Fanspo Error: ${res.status}`);
 
     const html = await res.text();
     const $ = cheerio.load(html);
 
-    // Grab the JSON Payload directly
+    // 3. Robust JSON Parsing (The "Bloodhound" method)
     const nextDataRaw = $('#__NEXT_DATA__').html();
-    if (!nextDataRaw) return { team: teamCode, error: "No Data Payload" };
+    if (!nextDataRaw) throw new Error("No Data Payload Found");
 
     const json = JSON.parse(nextDataRaw);
     const rawPicks = findPicksInJSON(json);
 
-    if (!rawPicks) return { team: teamCode, error: "Structure changed" };
+    if (!rawPicks) throw new Error("Picks data structure not found");
 
-    // Clean and Format
+    // 4. Process the data
     const cleanPicks = rawPicks
       .map(pick => {
-        // Logic to determine if it is "Incoming" or "Own"
-        // If the source team ID != this team's ID, it's from someone else
+        // Determine "From"
         let fromTeam = "Own";
         const sourceObj = pick.original_team || pick.from_team || pick.source_team;
         
-        // Check ID mismatch to identify traded picks
+        // If the source team ID is different from the current team ID, it's incoming
         if (sourceObj && String(sourceObj.team_id) !== String(team.id)) {
            fromTeam = sourceObj.team_code || "Traded";
         } else if (pick.original_team_id && String(pick.original_team_id) !== String(team.id)) {
            fromTeam = "Traded";
         }
 
+        // Clean Notes
         let notes = pick.note || pick.description || pick.text || "-";
         notes = notes.replace("Protected ", "Prot ");
 
@@ -109,31 +117,16 @@ async function fetchTeamPicks(teamCode) {
           notes: notes
         };
       })
-      .filter(p => p.year >= 2025) // Only future picks
+      .filter(p => p.year >= 2025) // Filter old picks
       .sort((a, b) => a.year - b.year || a.round - b.round);
 
-    return {
+    return NextResponse.json({
       team: teamCode,
-      id: team.id,
-      slug: team.slug,
-      assets: cleanPicks
-    };
+      data: cleanPicks
+    });
 
-  } catch (err) {
-    return { team: teamCode, error: err.message };
+  } catch (error) {
+    console.error(`Error fetching ${teamCode}:`, error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
-}
-
-// 4. Main Route Handler
-export async function GET() {
-  const teamKeys = Object.keys(TEAM_IDS);
-  
-  // Fetch all 30 teams in parallel
-  const allData = await Promise.all(teamKeys.map(key => fetchTeamPicks(key)));
-
-  return NextResponse.json({
-    count: allData.length,
-    timestamp: new Date().toISOString(),
-    teams: allData
-  });
 }
