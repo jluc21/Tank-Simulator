@@ -3,7 +3,6 @@ import * as cheerio from 'cheerio';
 
 export const dynamic = 'force-dynamic';
 
-// 1. Validated ID Map
 const TEAM_IDS = {
   ATL: { id: 1, slug: "atlanta-hawks" },
   BOS: { id: 2, slug: "boston-celtics" },
@@ -37,115 +36,79 @@ const TEAM_IDS = {
   WAS: { id: 30, slug: "washington-wizards" }
 };
 
+// This function hunts through the entire JSON object for any array containing 'season' and 'round'
+function findPicksRecursively(obj) {
+  if (!obj || typeof obj !== 'object') return null;
+  if (Array.isArray(obj)) {
+    const isPicksArray = obj.length > 0 && obj[0]?.season && obj[0]?.round;
+    if (isPicksArray) return obj;
+    for (const item of obj) {
+      const result = findPicksRecursively(item);
+      if (result) return result;
+    }
+  } else {
+    for (const key in obj) {
+      const result = findPicksRecursively(obj[key]);
+      if (result) return result;
+    }
+  }
+  return null;
+}
+
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const teamCode = searchParams.get('team');
 
-  // Validate Input
   if (!teamCode || !TEAM_IDS[teamCode]) {
-    return NextResponse.json({ success: false, error: 'Invalid Team Code' }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'Invalid Team' }, { status: 400 });
   }
 
-  const team = TEAM_IDS[teamCode];
-  const url = `https://fanspo.com/nba/teams/${team.slug}/${team.id}/draft-picks`;
+  const { id, slug } = TEAM_IDS[teamCode];
+  const url = `https://fanspo.com/nba/teams/${slug}/${id}/draft-picks`;
 
   try {
-    // 2. Fetch with Heavy Anti-Bot Headers
     const res = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache',
-        'Upgrade-Insecure-Requests': '1'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html'
       },
-      next: { revalidate: 0 } // Disable Vercel Cache for debugging
+      next: { revalidate: 3600 }
     });
-
-    if (!res.ok) throw new Error(`Fanspo Status: ${res.status}`);
 
     const html = await res.text();
     const $ = cheerio.load(html);
-    let picks = [];
 
-    // --- DIAGNOSTIC: Check if we are blocked ---
-    const pageTitle = $('title').text().trim();
-    const isBlocked = pageTitle.includes("Just a moment") || pageTitle.includes("Security") || pageTitle.includes("Attention Required");
+    // Extract the internal JSON state Fanspo uses
+    const nextDataRaw = $('#__NEXT_DATA__').html();
+    if (!nextDataRaw) throw new Error("Fanspo blocked access or changed layout");
 
-    if (isBlocked) {
-       console.error("BLOCKED BY CLOUDFLARE");
-       // Return a fake "empty" response with a special error note so the frontend doesn't crash
-       return NextResponse.json({
-         success: false,
-         error: "Cloudflare Blocked Request",
-         debug: { title: pageTitle }
-       });
-    }
+    const json = JSON.parse(nextDataRaw);
+    const draftPicks = findPicksRecursively(json);
 
-    // --- STRATEGY A: Standard Table Scrape ---
-    // Look for ANY table row, ignoring tbody/thead distinction
-    $('tr').each((i, row) => {
-      const cols = $(row).find('td');
-      // Must have at least 4 columns to be a pick row
-      if (cols.length >= 4) {
-         const yearTxt = $(cols[0]).text().trim();
-         // Check if the first column is a year 2025-2032
-         if (/^20(2[5-9]|3[0-2])$/.test(yearTxt)) {
-            const year = parseInt(yearTxt);
-            const round = $(cols[1]).text().trim();
-            const from = $(cols[3]).text().trim(); 
-            let notes = $(cols[4]).text().trim();
-            
-            // Fallback for "From" column if table structure is weird
-            const source = from || "Check Notes";
-            if (!notes) notes = "-";
-            notes = notes.replace("Protected ", "Prot ").replace(/[\n\r]+/g, " ");
+    if (!draftPicks) throw new Error("Could not locate pick data in payload");
 
-            picks.push({ year, round, from: source, notes });
-         }
-      }
-    });
-
-    // --- STRATEGY B: The "Nuclear" Regex Fallback ---
-    // If table scrape failed (0 picks) but we aren't blocked, try regex on the raw text.
-    // This helps if they used <div>s instead of <table>s.
-    if (picks.length === 0) {
-      const bodyText = $('body').text();
-      // Look for patterns like "2025 1 -" or "2025 Round 1"
-      // This is a simplified regex to catch the raw text format seen on Fanspo
-      const regex = /(202[5-9]|203[0-2])\s+([12])\s+(-|[A-Z]{3}|[a-zA-Z\s]+)\s+(.*?)(?=202[5-9]|203[0-2]|$)/gm;
-      
-      let match;
-      while ((match = regex.exec(bodyText)) !== null) {
-        // Simple sanity check: line shouldn't be too long (avoid capturing articles)
-        if (match[0].length < 200) {
-            picks.push({
-                year: parseInt(match[1]),
-                round: match[2],
-                from: "Extracted", // Regex can't reliably get the "From" column structure
-                notes: match[4].trim().substring(0, 50) + "..."
-            });
+    const assets = draftPicks
+      .map(pick => {
+        // Identify if the pick belongs to the current team or is incoming
+        let source = "Own";
+        if (pick.original_team?.team_code && pick.original_team.team_code !== teamCode) {
+          source = pick.original_team.team_code;
         }
-      }
-    }
 
-    // Sort
-    picks.sort((a, b) => a.year - b.year || a.round - b.round);
+        return {
+          year: parseInt(pick.season),
+          round: pick.round,
+          from: source,
+          notes: (pick.note || pick.description || "Unprotected").replace("Protected ", "Prot ")
+        };
+      })
+      .filter(a => a.year >= 2025)
+      .sort((a, b) => a.year - b.year || a.round - b.round);
 
-    return NextResponse.json({
-      success: true,
-      data: picks,
-      source: 'Fanspo',
-      debug: {
-        matches: picks.length,
-        title: pageTitle, // This will tell us if we are on the right page
-        scraped_url: url
-      }
-    });
+    return NextResponse.json({ success: true, data: assets });
 
   } catch (error) {
-    console.error("Scrape Error:", error);
+    console.error(error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
