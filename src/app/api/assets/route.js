@@ -1,127 +1,159 @@
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
 
-// CONFIGURATION: Revalidate every 2 hours
-export const revalidate = 7200; 
+// FORCE DYNAMIC: No caching. This ensures you see changes INSTANTLY.
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
-// Fanspo uses specific IDs for teams. We map your "SAS" code to their ID/Slug.
-const FANSPO_TEAMS = {
-  ATL: { id: 1, slug: "atlanta-hawks" },
-  BOS: { id: 2, slug: "boston-celtics" },
-  BKN: { id: 3, slug: "brooklyn-nets" },
-  CHA: { id: 4, slug: "charlotte-hornets" },
-  CHI: { id: 5, slug: "chicago-bulls" },
-  CLE: { id: 6, slug: "cleveland-cavaliers" },
-  DAL: { id: 7, slug: "dallas-mavericks" },
-  DEN: { id: 8, slug: "denver-nuggets" },
-  DET: { id: 9, slug: "detroit-pistons" },
-  GSW: { id: 10, slug: "golden-state-warriors" },
-  HOU: { id: 11, slug: "houston-rockets" },
-  IND: { id: 12, slug: "indiana-pacers" },
-  LAC: { id: 13, slug: "la-clippers" },
-  LAL: { id: 14, slug: "los-angeles-lakers" },
-  MEM: { id: 15, slug: "memphis-grizzlies" },
-  MIA: { id: 16, slug: "miami-heat" },
-  MIL: { id: 17, slug: "milwaukee-bucks" },
-  MIN: { id: 18, slug: "minnesota-timberwolves" },
-  NOP: { id: 19, slug: "new-orleans-pelicans" },
-  NYK: { id: 20, slug: "new-york-knicks" },
-  OKC: { id: 21, slug: "oklahoma-city-thunder" },
-  ORL: { id: 22, slug: "orlando-magic" },
-  PHI: { id: 23, slug: "philadelphia-76ers" },
-  PHX: { id: 24, slug: "phoenix-suns" },
-  POR: { id: 25, slug: "portland-trail-blazers" },
-  SAC: { id: 26, slug: "sacramento-kings" },
-  SAS: { id: 27, slug: "san-antonio-spurs" },
-  TOR: { id: 28, slug: "toronto-raptors" },
-  UTA: { id: 29, slug: "utah-jazz" },
-  WAS: { id: 30, slug: "washington-wizards" }
+const TEAM_MAP = {
+  ATL: { id: 1, slug: "Atlanta-Hawks" },
+  BOS: { id: 2, slug: "Boston-Celtics" },
+  BKN: { id: 38, slug: "Brooklyn-Nets" },
+  CHA: { id: 3, slug: "Charlotte-Hornets" },
+  CHI: { id: 4, slug: "Chicago-Bulls" },
+  CLE: { id: 5, slug: "Cleveland-Cavaliers" },
+  DAL: { id: 6, slug: "Dallas-Mavericks" },
+  DEN: { id: 7, slug: "Denver-Nuggets" },
+  DET: { id: 8, slug: "Detroit-Pistons" },
+  GSW: { id: 9, slug: "Golden-State-Warriors" },
+  HOU: { id: 10, slug: "Houston-Rockets" },
+  IND: { id: 11, slug: "Indiana-Pacers" },
+  LAC: { id: 12, slug: "Los-Angeles-Clippers" },
+  LAL: { id: 13, slug: "Los-Angeles-Lakers" },
+  MEM: { id: 14, slug: "Memphis-Grizzlies" },
+  MIA: { id: 15, slug: "Miami-Heat" },
+  MIL: { id: 16, slug: "Milwaukee-Bucks" },
+  MIN: { id: 17, slug: "Minnesota-Timberwolves" },
+  NOP: { id: 18, slug: "New-Orleans-Pelicans" },
+  NYK: { id: 19, slug: "New-York-Knicks" },
+  OKC: { id: 25, slug: "Oklahoma-City-Thunder" },
+  ORL: { id: 21, slug: "Orlando-Magic" },
+  PHI: { id: 22, slug: "Philadelphia-Sixers" },
+  PHX: { id: 23, slug: "Phoenix-Suns" },
+  POR: { id: 24, slug: "Portland-Trail-Blazers" },
+  SAC: { id: 26, slug: "Sacramento-Kings" },
+  SAS: { id: 27, slug: "San-Antonio-Spurs" },
+  TOR: { id: 28, slug: "Toronto-Raptors" },
+  UTA: { id: 29, slug: "Utah-Jazz" },
+  WAS: { id: 30, slug: "Washington-Wizards" }
 };
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const teamCode = searchParams.get('team');
 
-  if (!teamCode || !FANSPO_TEAMS[teamCode]) {
+  if (!teamCode || !TEAM_MAP[teamCode]) {
     return NextResponse.json({ error: 'Invalid Team Code' }, { status: 400 });
   }
 
   try {
-    // 1. Target the Fanspo Draft Picks Page
-    const { id, slug } = FANSPO_TEAMS[teamCode];
-    const url = `https://fanspo.com/nba/teams/${slug}/${id}/draft-picks`;
-
+    const { id, slug } = TEAM_MAP[teamCode];
+    const url = `https://basketball.realgm.com/nba/teams/${slug}/${id}/draft_picks`;
+    
+    // FETCH WITH BROWSER HEADERS
     const res = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
       },
-      next: { revalidate: 7200 }
+      cache: 'no-store'
     });
 
-    if (!res.ok) throw new Error(`Fanspo responded with ${res.status}`);
+    if (!res.ok) throw new Error(`RealGM Error: ${res.status}`);
     const html = await res.text();
     const $ = cheerio.load(html);
 
-    // 2. THE HEIST: Grab the hidden Next.js Data Blob
-    // Fanspo stores all page data in this script tag. It's clean JSON.
-    const jsonRaw = $('#__NEXT_DATA__').html();
-    
-    if (!jsonRaw) {
-      throw new Error("Could not find Fanspo data blob. They may have changed their site structure.");
+    // INITIALIZE LEDGER (Assume they own everything)
+    let assets = [];
+    for (let y = 2026; y <= 2032; y++) {
+      assets.push({ year: y, round: 1, from: "Own", notes: "Unprotected", original: true });
+      assets.push({ year: y, round: 2, from: "Own", notes: "Unprotected", original: true });
     }
 
-    const jsonData = JSON.parse(jsonRaw);
-    
-    // 3. Navigate the JSON tree to find the picks
-    // Structure usually: props -> pageProps -> teamDraftPicks
-    const picksData = jsonData?.props?.pageProps?.teamDraftPicks;
+    // FIND THE SPECIFIC TABLE BY HEADER TEXT
+    let targetTable = null;
+    $('h2').each((i, el) => {
+      if ($(el).text().includes("Future Traded Pick Details")) {
+        targetTable = $(el).next('div').find('table'); // RealGM often wraps tables in divs
+        if (targetTable.length === 0) targetTable = $(el).next('table');
+      }
+    });
 
-    if (!picksData || !Array.isArray(picksData)) {
-      // Fallback: Sometimes it's under 'team' -> 'draftPicks'
-      const altData = jsonData?.props?.pageProps?.team?.draftPicks;
-      if (!altData) throw new Error("Data parsing failed. JSON structure changed.");
-      return NextResponse.json(cleanFanspoData(altData));
+    if (!targetTable) {
+        // Fallback: Just grab the second table on the page (usually the trade table)
+        targetTable = $('table').eq(1); 
     }
 
-    return NextResponse.json(cleanFanspoData(picksData));
+    // PARSE ROWS
+    targetTable.find('tr').each((i, row) => {
+      const cols = $(row).find('td');
+      if (cols.length < 3) return; // Need Year | Incoming | Outgoing
+
+      const year = parseInt(cols.eq(0).text().trim());
+      if (isNaN(year) || year < 2026 || year > 2032) return;
+
+      const incoming = cols.eq(1).text().trim();
+      const outgoing = cols.eq(2).text().trim();
+
+      // LOGIC: PROCESS OUTGOING
+      if (outgoing && !outgoing.includes("No picks outgoing")) {
+        const isFirst = outgoing.toLowerCase().includes("first round");
+        const round = isFirst ? 1 : 2;
+        const idx = assets.findIndex(a => a.year === year && a.round === round && a.original);
+        
+        if (idx !== -1) {
+          if (outgoing.toLowerCase().includes("swap")) {
+            assets[idx].notes = `Subject to Swap (${extractTeam(outgoing)})`;
+          } else {
+            assets.splice(idx, 1); // Delete traded pick
+          }
+        }
+      }
+
+      // LOGIC: PROCESS INCOMING
+      if (incoming && !incoming.includes("No picks incoming")) {
+        const picks = splitPicks(incoming);
+        picks.forEach(pText => {
+          const isFirst = pText.toLowerCase().includes("first round");
+          const round = isFirst ? 1 : 2;
+          
+          if (pText.toLowerCase().includes("swap")) {
+            const idx = assets.findIndex(a => a.year === year && a.round === round && a.original);
+            if (idx !== -1) {
+               assets[idx].notes = (assets[idx].notes === "Unprotected") 
+                  ? `Swap Rights (${extractTeam(pText)})` 
+                  : `${assets[idx].notes} & Swap (${extractTeam(pText)})`;
+            }
+          } else {
+            assets.push({
+              year,
+              round,
+              from: extractTeam(pText),
+              notes: extractProtections(pText),
+              original: false
+            });
+          }
+        });
+      }
+    });
+
+    assets.sort((a, b) => a.year - b.year || a.round - b.round);
+    return NextResponse.json({ success: true, data: assets, source: url });
 
   } catch (error) {
-    console.error("Fanspo Scraper Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: error.message });
   }
 }
 
-// --- CLEANUP HELPER ---
-// Fanspo's raw JSON has a lot of noise. We sanitize it for your table.
-function cleanFanspoData(rawPicks) {
-  return rawPicks.map(p => {
-    // Determine the "From" team
-    let from = "Own";
-    if (p.original_team && p.original_team.team_code) {
-      // If original team is different from current owner, show it
-      // Note: We need to know who "we" are to say "Own", but usually Fanspo handles this logic.
-      // We will trust their "text" description often found in 'note'
-      from = p.original_team.team_abbreviation;
-    }
-
-    // Logic for incoming vs own
-    // Fanspo usually lists everything the team OWNS.
-    
-    // Extract Protections/Notes
-    let notes = p.note || "";
-    
-    // Clean up "Unprotected" if it's redundant
-    if (!notes && from !== "Own") notes = "Unprotected"; 
-    
-    // Clean up Year
-    const year = parseInt(p.season);
-
-    return {
-      year,
-      round: p.round,
-      from: from, // e.g. "SAS" or "MIL"
-      notes: notes.substring(0, 60), // Keep it short
-      pickNum: p.overall_pick || "-"
-    };
-  }).sort((a, b) => a.year - b.year || a.round - b.round);
+// HELPERS
+function splitPicks(text) {
+  return text.split(/(?=\d{4} (?:first|second) round)/).filter(t => t.length > 10);
+}
+function extractTeam(text) {
+  const match = text.match(/from ([A-Z][a-z]+)/);
+  return match ? match[1].substring(0,3).toUpperCase() : "Trade";
+}
+function extractProtections(text) {
+  if (text.includes("unprotected")) return "Unprotected";
+  const m = text.match(/protected [0-9-]+/);
+  return m ? m[0] : "Acquired via Trade";
 }
