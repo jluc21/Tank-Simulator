@@ -1,81 +1,82 @@
 "use client";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
-// --- THE MASTER 61 (2026 SIMULATION) ---
-// IMAGES: Using Official ESPN Team Logos to guarantee they never break or expire.
+// --- THE MASTER 61 (2026 NBA DRAFT CLASS) ---
+// IMAGES: Hardcoded Official Team Logos (Never Break)
+// STATS: Default values (Will be overwritten by live API)
 const MASTER_PLAYERS = [
   // --- TIER 1: THE LOTTERY ---
   { 
     rank: 1, name: "Darryn Peterson", team: "Kansas", pos: "G", 
     stats: { ppg: "19.3", rpg: "3.8", apg: "2.8", fg: "52.8%", threePt: "42.3%" },
-    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/2305.png" // Kansas
+    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/2305.png" 
   },
   { 
     rank: 2, name: "Cameron Boozer", team: "Duke", pos: "PF", 
     stats: { ppg: "22.1", rpg: "11.7", apg: "3.2", fg: "56.5%", threePt: "38.5%" },
-    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png" // Duke
+    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png" 
   },
   { 
     rank: 3, name: "AJ Dybantsa", team: "BYU", pos: "SF", 
     stats: { ppg: "23.1", rpg: "7.2", apg: "3.8", fg: "59.1%", threePt: "33.3%" },
-    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/252.png" // BYU
+    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/252.png" 
   },
   { 
     rank: 4, name: "Caleb Wilson", team: "UNC", pos: "PF", 
     stats: { ppg: "21.7", rpg: "11.0", apg: "5.0", fg: "54.0%", threePt: "36.0%" },
-    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/153.png" // UNC
+    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/153.png" 
   },
   { 
     rank: 5, name: "Nate Ament", team: "Tennessee", pos: "SF", 
     stats: { ppg: "18.9", rpg: "10.0", apg: "2.2", fg: "48.5%", threePt: "41.2%" },
-    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/2633.png" // Tennessee
+    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/2633.png" 
   },
   { 
     rank: 6, name: "Kingston Flemings", team: "Houston", pos: "PG", 
     stats: { ppg: "20.4", rpg: "6.4", apg: "6.8", fg: "46.0%", threePt: "35.0%" },
-    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/248.png" // Houston
+    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/248.png" 
   },
   { 
     rank: 7, name: "Mikel Brown Jr.", team: "Louisville", pos: "PG", 
     stats: { ppg: "14.9", rpg: "3.3", apg: "6.1", fg: "44.0%", threePt: "38.0%" },
-    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/97.png" // Louisville
+    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/97.png" 
   },
   { 
     rank: 8, name: "Braylon Mullins", team: "UConn", pos: "SG", 
     stats: { ppg: "17.0", rpg: "5.4", apg: "2.1", fg: "50.0%", threePt: "47.6%" },
-    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/41.png" // UConn
+    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/41.png" 
   },
   { 
     rank: 9, name: "Koa Peat", team: "Arizona", pos: "PF", 
     stats: { ppg: "18.0", rpg: "10.0", apg: "4.9", fg: "56.0%", threePt: "28.0%" },
-    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/12.png" // Arizona
+    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/12.png" 
   },
   { 
     rank: 10, name: "Tounde Yessoufou", team: "Baylor", pos: "SF", 
     stats: { ppg: "23.7", rpg: "7.2", apg: "2.7", fg: "49.0%", threePt: "36.0%" },
-    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/239.png" // Baylor
+    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/239.png" 
   },
   { 
     rank: 11, name: "Jayden Quaintance", team: "Arizona St", pos: "C", 
     stats: { ppg: "11.2", rpg: "14.4", apg: "1.2", fg: "60.0%", threePt: "0.0%" },
-    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/9.png" // ASU
+    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/9.png" 
   },
   { 
     rank: 12, name: "Labaron Philon", team: "Alabama", pos: "PG", 
     stats: { ppg: "15.5", rpg: "4.5", apg: "7.0", fg: "48.0%", threePt: "39.0%" },
-    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/333.png" // Alabama
+    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/333.png" 
   },
   { 
     rank: 13, name: "Darius Acuff", team: "Arkansas", pos: "PG", 
     stats: { ppg: "16.2", rpg: "3.2", apg: "4.5", fg: "42.0%", threePt: "34.0%" },
-    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/8.png" // Arkansas
+    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/8.png" 
   },
   { 
     rank: 14, name: "Yaxel Lendeborg", team: "Michigan", pos: "PF", 
     stats: { ppg: "21.0", rpg: "9.6", apg: "4.8", fg: "52.0%", threePt: "38.0%" },
-    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/130.png" // Michigan
+    img: "https://a.espncdn.com/i/teamlogos/ncaa/500/130.png" 
   },
-
+  
   // --- TIER 4: MID-FIRST ROUND ---
   { rank: 15, name: "Chris Cenac", team: "Houston", pos: "C", stats: { ppg: "12.4", rpg: "8.5", apg: "1.2", fg: "62%", threePt: "0%" }, img: "https://a.espncdn.com/i/teamlogos/ncaa/500/248.png" },
   { rank: 16, name: "Meleek Thomas", team: "Arkansas", pos: "SG", stats: { ppg: "15.8", rpg: "4.2", apg: "3.1", fg: "45%", threePt: "37%" }, img: "https://a.espncdn.com/i/teamlogos/ncaa/500/8.png" },
@@ -86,7 +87,7 @@ const MASTER_PLAYERS = [
   { rank: 21, name: "Eric Reibe", team: "UConn", pos: "C", stats: { ppg: "10.5", rpg: "8.0", apg: "2.2", fg: "58%", threePt: "33%" }, img: "https://a.espncdn.com/i/teamlogos/ncaa/500/41.png" },
   { rank: 22, name: "Nikolas Khamenia", team: "Gonzaga", pos: "SF", stats: { ppg: "12.2", rpg: "5.1", apg: "3.4", fg: "49%", threePt: "38%" }, img: "https://a.espncdn.com/i/teamlogos/ncaa/500/2250.png" },
   { rank: 23, name: "Acaden Lewis", team: "Kentucky", pos: "PG", stats: { ppg: "14.5", rpg: "3.0", apg: "5.5", fg: "43%", threePt: "36%" }, img: "https://a.espncdn.com/i/teamlogos/ncaa/500/96.png" },
-  { rank: 24, name: "Karim Lopez", team: "N. Zealand", pos: "SF", stats: { ppg: "15.4", rpg: "6.5", apg: "2.1", fg: "47%", threePt: "35%" }, img: "https://a.espncdn.com/i/teamlogos/ncaa/500/2483.png" }, // Oregon/Intl placeholder
+  { rank: 24, name: "Karim Lopez", team: "N. Zealand", pos: "SF", stats: { ppg: "15.4", rpg: "6.5", apg: "2.1", fg: "47%", threePt: "35%" }, img: "https://a.espncdn.com/i/teamlogos/ncaa/500/2483.png" },
   { rank: 25, name: "Hugo Gonzalez", team: "R. Madrid", pos: "SF", stats: { ppg: "11.2", rpg: "4.0", apg: "1.8", fg: "50%", threePt: "32%" }, img: "https://upload.wikimedia.org/wikipedia/en/thumb/a/a6/Real_Madrid_CF_logo.svg/1200px-Real_Madrid_CF_logo.svg.png" },
   { rank: 26, name: "Will Riley", team: "Illinois", pos: "SF", stats: { ppg: "17.5", rpg: "5.5", apg: "2.5", fg: "46%", threePt: "41%" }, img: "https://a.espncdn.com/i/teamlogos/ncaa/500/356.png" },
   { rank: 27, name: "Morez Johnson", team: "Illinois", pos: "C", stats: { ppg: "11.0", rpg: "9.5", apg: "0.8", fg: "63%", threePt: "0%" }, img: "https://a.espncdn.com/i/teamlogos/ncaa/500/356.png" },
@@ -130,10 +131,35 @@ const MASTER_PLAYERS = [
 
 export default function BigBoardPage() {
   const [players, setPlayers] = useState(MASTER_PLAYERS);
+  const [lastUpdated, setLastUpdated] = useState("Loading live stats...");
 
-  // We are NOT fetching from API anymore because these are the approved,
-  // hardcoded "Simulated 2026 Season" stats you verified.
-  // This guarantees the images (Team Logos) never break.
+  // --- LIVE STATS ENGINE ---
+  // This fetches the live data and MERGES it into the list above.
+  // It guarantees the images (Team Logos) stay safe.
+  useEffect(() => {
+    async function fetchLiveStats() {
+      try {
+        const res = await fetch('/api/stats');
+        const liveData = await res.json();
+        
+        if (liveData && liveData.length > 0) {
+          const updated = MASTER_PLAYERS.map(p => {
+            const live = liveData.find(l => l.name === p.name);
+            if (live) {
+              // Only update the STATS. Keep the safe Team Logo.
+              return { ...p, stats: live.stats };
+            }
+            return p;
+          });
+          setPlayers(updated);
+          setLastUpdated("Live Updates • 2025-26 Season");
+        }
+      } catch (error) {
+        setLastUpdated("Offline Mode • 2026 Projections");
+      }
+    }
+    fetchLiveStats();
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50 text-black font-sans pb-20">
@@ -143,8 +169,8 @@ export default function BigBoardPage() {
         <h1 className="text-3xl md:text-5xl font-light text-gray-800 tracking-tight">
           2026 NBA Draft <span className="font-bold">Big Board</span>
         </h1>
-        <p className="text-gray-500 text-xs md:text-sm mt-2 uppercase tracking-widest font-semibold">
-          Top 61 Prospects • 2025-26 Season Data
+        <p className="text-gray-500 text-xs md:text-sm mt-2 uppercase tracking-widest font-semibold animate-pulse">
+          {lastUpdated}
         </p>
       </div>
 
