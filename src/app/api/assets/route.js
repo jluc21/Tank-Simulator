@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
 
+// Force dynamic to ensure we scrape live every time
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
-// --- 1. CONFIGURATION ---
-const FANSPO_IDS = {
+const TEAM_IDS = {
   ATL: { id: 1, slug: "atlanta-hawks" },
   BOS: { id: 2, slug: "boston-celtics" },
   BKN: { id: 3, slug: "brooklyn-nets" },
@@ -38,90 +37,80 @@ const FANSPO_IDS = {
   WAS: { id: 30, slug: "washington-wizards" }
 };
 
-// --- 2. THE SAFETY NET (Golden Data) ---
-// If the scraper gets blocked (403), we serve this data instantly.
-// This ensures the "Kings 2031 Swap" logic is ALWAYS correct.
-const BACKUP_DATA = {
-  SAC: [
-    { year: 2026, round: 1, from: "Own", notes: "Owed to ATL (Prot 1-14)" },
-    { year: 2026, round: 2, from: "Own", notes: "Unprotected" },
-    { year: 2026, round: 2, from: "POR", notes: "via CHA" },
-    { year: 2027, round: 1, from: "Own", notes: "Unprotected" },
-    { year: 2028, round: 1, from: "Own", notes: "Unprotected" },
-    { year: 2029, round: 1, from: "Own", notes: "Unprotected" },
-    { year: 2030, round: 1, from: "Own", notes: "Unprotected" },
-    { year: 2031, round: 1, from: "Own", notes: "Subject to Swap (SAS)" }, // <--- THE KEY LINE
-    { year: 2032, round: 1, from: "Own", notes: "Unprotected" }
-  ],
-  ATL: [
-    { year: 2025, round: 1, from: "LAL", notes: "Unprotected" },
-    { year: 2025, round: 1, from: "SAC", notes: "Protected 1-12" },
-    { year: 2026, round: 1, from: "Own", notes: "Swap Rights (SAS)" },
-    { year: 2027, round: 1, from: "Own", notes: "Unprotected" },
-    { year: 2027, round: 1, from: "NOP/MIL", notes: "Via DJM Trade" }
-  ]
-};
-
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const teamCode = searchParams.get('team');
 
-  if (!teamCode || !FANSPO_IDS[teamCode]) return NextResponse.json({ error: 'Invalid Team' }, { status: 400 });
+  if (!teamCode || !TEAM_IDS[teamCode]) {
+    return NextResponse.json({ error: 'Invalid Team' }, { status: 400 });
+  }
 
   try {
-    // ATTEMPT 1: Scrape Fanspo
-    const { id, slug } = FANSPO_IDS[teamCode];
+    const { id, slug } = TEAM_IDS[teamCode];
+    // Target Fanspo's Draft Picks Page
     const url = `https://fanspo.com/nba/teams/${slug}/${id}/draft-picks`;
     
     const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-      next: { revalidate: 3600 }
+      headers: {
+        // Look like a real Chrome browser to avoid blocks
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9'
+      },
+      cache: 'no-store'
     });
 
-    if (res.status === 403 || res.status === 404) throw new Error("Blocked");
-    
+    if (!res.ok) throw new Error(`Fanspo Error: ${res.status}`);
+
     const html = await res.text();
     const $ = cheerio.load(html);
+
+    // THE HEIST: Extract the hidden JSON data Fanspo uses to hydrate the page
+    const nextDataRaw = $('#__NEXT_DATA__').html();
     
-    // Fanspo stores data in a hidden script tag
-    const jsonRaw = $('#__NEXT_DATA__').html();
-    if (!jsonRaw) throw new Error("No Data Found");
-    
-    const jsonData = JSON.parse(jsonRaw);
-    const picks = jsonData?.props?.pageProps?.teamDraftPicks || [];
+    if (!nextDataRaw) {
+      throw new Error("Could not find data payload");
+    }
 
-    if (picks.length === 0) throw new Error("Empty Data");
+    const json = JSON.parse(nextDataRaw);
+    const draftPicks = json?.props?.pageProps?.teamDraftPicks;
 
-    // Clean Fanspo Data
-    const assets = picks.map(p => ({
-      year: parseInt(p.season),
-      round: p.round,
-      from: p.original_team ? p.original_team.team_code : "Own",
-      notes: p.note || (p.original_team?.team_code !== teamCode ? "Acquired via Trade" : "Unprotected")
-    })).sort((a, b) => a.year - b.year || a.round - b.round);
+    if (!draftPicks || !Array.isArray(draftPicks)) {
+      throw new Error("Data structure changed");
+    }
 
-    return NextResponse.json({ success: true, data: assets, source: 'Fanspo Live' });
+    // Process the clean JSON data
+    let assets = draftPicks.map(pick => {
+      // Determine if it's "Own" or traded
+      let fromTeam = "Own";
+      if (pick.original_team && pick.original_team.team_code !== teamCode) {
+        fromTeam = pick.original_team.team_code;
+      }
 
-  } catch (error) {
-    // ATTEMPT 2: Fail-Safe (The "Golden Parachute")
-    // If blocked, return the perfect manual data for key teams
-    console.log("Scraper blocked, using backup.");
-    const safeData = BACKUP_DATA[teamCode] || generateGenericPicks(2026, 2032);
-    
+      // Format the notes
+      let notes = pick.note || "Unprotected";
+      // Clean up common lengthy notes
+      notes = notes.replace("Protected ", "Prot ");
+      
+      return {
+        year: parseInt(pick.season),
+        round: pick.round,
+        from: fromTeam,
+        notes: notes
+      };
+    });
+
+    // Sort by Year -> Round
+    assets.sort((a, b) => a.year - b.year || a.round - b.round);
+
     return NextResponse.json({ 
       success: true, 
-      data: safeData, 
-      source: 'Backup Ledger (Scraper Blocked)' 
+      data: assets, 
+      source: 'Fanspo Live Scrape' 
     });
-  }
-}
 
-// Helper to generate generic picks for teams we haven't manually backed up yet
-function generateGenericPicks(start, end) {
-  let arr = [];
-  for (let y = start; y <= end; y++) {
-    arr.push({ year: y, round: 1, from: "Own", notes: "Unprotected" });
-    arr.push({ year: y, round: 2, from: "Own", notes: "Unprotected" });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ success: false, error: error.message });
   }
-  return arr;
 }
