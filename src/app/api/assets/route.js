@@ -1,143 +1,178 @@
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
 
-// --- CONFIGURATION ---
-// Revalidate once every 24 hours (86400 seconds)
-// This makes us a "Good Citizen" bot that won't get banned.
-export const revalidate = 86400; 
+// CONFIGURATION: Revalidate every 4 hours (14400 seconds).
+// Fast enough to fix bugs same-day, slow enough to avoid IP bans.
+export const revalidate = 14400; 
 
-export async function GET() {
+// RealGM Team IDs (Required for their specific URL structure)
+const TEAM_IDS = {
+  ATL: 1, BOS: 2, BKN: 38, CHA: 3, CHI: 4, CLE: 5, DAL: 6, DEN: 7, DET: 8, GSW: 9,
+  HOU: 10, IND: 11, LAC: 12, LAL: 13, MEM: 14, MIA: 15, MIL: 16, MIN: 17, NOP: 18, NYK: 19,
+  OKC: 25, ORL: 21, PHI: 22, PHX: 23, POR: 24, SAC: 26, SAS: 27, TOR: 28, UTA: 29, WAS: 30
+};
+
+const TEAM_SLUGS = {
+  ATL: "Atlanta-Hawks", BOS: "Boston-Celtics", BKN: "Brooklyn-Nets", CHA: "Charlotte-Hornets",
+  CHI: "Chicago-Bulls", CLE: "Cleveland-Cavaliers", DAL: "Dallas-Mavericks", DEN: "Denver-Nuggets",
+  DET: "Detroit-Pistons", GSW: "Golden-State-Warriors", HOU: "Houston-Rockets", IND: "Indiana-Pacers",
+  LAC: "Los-Angeles-Clippers", LAL: "Los-Angeles-Lakers", MEM: "Memphis-Grizzlies", MIA: "Miami-Heat",
+  MIL: "Milwaukee-Bucks", MIN: "Minnesota-Timberwolves", NOP: "New-Orleans-Pelicans", NYK: "New-York-Knicks",
+  OKC: "Oklahoma-City-Thunder", ORL: "Orlando-Magic", PHI: "Philadelphia-Sixers", PHX: "Phoenix-Suns",
+  POR: "Portland-Trail-Blazers", SAC: "Sacramento-Kings", SAS: "San-Antonio-Spurs", TOR: "Toronto-Raptors",
+  UTA: "Utah-Jazz", WAS: "Washington-Wizards"
+};
+
+export async function GET(request) {
+  const { searchParams } = new URL(request.url);
+  const teamCode = searchParams.get('team');
+
+  if (!teamCode || !TEAM_IDS[teamCode]) {
+    return NextResponse.json({ error: 'Invalid Team' }, { status: 400 });
+  }
+
   try {
-    // Fetch the "Detailed" ledger which has ALL picks for ALL teams
-    const res = await fetch('https://basketball.realgm.com/nba/draft/future_drafts/detailed', {
+    // 1. Construct the RealGM Team Page URL
+    const slug = TEAM_SLUGS[teamCode];
+    const id = TEAM_IDS[teamCode];
+    const url = `https://basketball.realgm.com/nba/teams/${slug}/${id}/draft_picks`;
+    
+    const res = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
       }
     });
 
     if (!res.ok) throw new Error('RealGM Unreachable');
     const html = await res.text();
     const $ = cheerio.load(html);
-    const assets = {};
 
-    // RealGM Structure: <h2>Team Name</h2> ... <ul><li>Pick Details</li></ul>
-    $('h2').each((i, header) => {
-      const headerText = $(header).text();
-      if (headerText.includes("Future Draft Pick Details")) {
-        const teamName = headerText.replace(" Future Draft Pick Details", "").trim();
-        const teamCode = getTeamCode(teamName);
-        
-        if (teamCode) {
-          assets[teamCode] = [];
+    // 2. INITIALIZE THE LEDGER (2026-2032)
+    // Start by assuming the team owns ALL their own picks initially.
+    let assets = [];
+    for (let year = 2026; year <= 2032; year++) {
+      assets.push({ year, round: 1, from: "Own", notes: "Unprotected", original: true });
+      assets.push({ year, round: 2, from: "Own", notes: "Unprotected", original: true });
+    }
+
+    // 3. PARSE THE TABLE (Incoming / Outgoing Logic)
+    // Look for the "Future Traded Pick Details" table
+    $('.basketball.compact tbody tr').each((i, row) => {
+      const cols = $(row).find('td');
+      if (cols.length < 3) return; // Skip invalid rows
+
+      const yearText = cols.eq(0).text().trim();
+      const year = parseInt(yearText);
+      
+      if (year >= 2026 && year <= 2032) {
+        const incomingText = cols.eq(1).text().trim();
+        const outgoingText = cols.eq(2).text().trim();
+
+        // --- A: PROCESS OUTGOING (Subtract or Swap) ---
+        if (outgoingText && !outgoingText.includes("No picks outgoing")) {
+          const isFirst = outgoingText.toLowerCase().includes("first round");
+          const round = isFirst ? 1 : 2; 
+
+          // Find the "Own" pick for this year/round
+          const index = assets.findIndex(a => a.year === year && a.round === round && a.original);
           
-          // Find the list of picks following this header
-          let nextElem = $(header).next();
-          while (nextElem.length && !nextElem.is('h2')) {
-            if (nextElem.is('ul')) {
-              nextElem.find('li').each((j, li) => {
-                const rawText = $(li).text();
-                const cleanPick = parseRealGMText(rawText);
-                if (cleanPick) {
-                  assets[teamCode].push(cleanPick);
-                }
-              });
+          if (index !== -1) {
+            // SCENARIO 1: SWAP (Keep the pick, but mark it)
+            if (outgoingText.toLowerCase().includes("swap")) {
+               assets[index].notes = `Subject to Swap (${extractSwapPartner(outgoingText)})`;
+            } 
+            // SCENARIO 2: TRADED AWAY (Delete the pick)
+            else {
+               assets.splice(index, 1); 
             }
-            nextElem = nextElem.next();
           }
+        }
+
+        // --- B: PROCESS INCOMING (Add or Upgrade) ---
+        if (incomingText && !incomingText.includes("No picks incoming")) {
+          const picks = splitIncomingPicks(incomingText);
+          
+          picks.forEach(pickDesc => {
+            const isFirst = pickDesc.toLowerCase().includes("first round");
+            const round = isFirst ? 1 : 2;
+            
+            // Check if this is a Swap RIGHT (upgrading an existing pick)
+            if (pickDesc.toLowerCase().includes("swap")) {
+               const ownIndex = assets.findIndex(a => a.year === year && a.round === round && a.original);
+               if (ownIndex !== -1) {
+                 // Append the swap right to the existing pick
+                 const currentNote = assets[ownIndex].notes === "Unprotected" ? "" : assets[ownIndex].notes + " & ";
+                 assets[ownIndex].notes = `${currentNote}Swap Rights (${extractFromTeam(pickDesc)})`;
+               }
+            } else {
+               // It is a pure extra pick. Add it to the list.
+               assets.push({
+                 year,
+                 round,
+                 from: extractFromTeam(pickDesc),
+                 notes: extractProtections(pickDesc),
+                 original: false
+               });
+            }
+          });
         }
       }
     });
 
+    // 4. SORT FINAL LIST
+    assets.sort((a, b) => a.year - b.year || a.round - b.round);
+
     return NextResponse.json(assets);
 
   } catch (error) {
-    console.error("Scraper Failed:", error);
+    console.error("Scraper Error:", error);
     return NextResponse.json({ error: 'Failed to scrape' }, { status: 500 });
   }
 }
 
-// --- HELPER: MAP FULL NAMES TO CODES ---
-function getTeamCode(name) {
-  const map = {
-    "Atlanta Hawks": "ATL", "Boston Celtics": "BOS", "Brooklyn Nets": "BKN", "Charlotte Hornets": "CHA",
-    "Chicago Bulls": "CHI", "Cleveland Cavaliers": "CLE", "Dallas Mavericks": "DAL", "Denver Nuggets": "DEN",
-    "Detroit Pistons": "DET", "Golden State Warriors": "GSW", "Houston Rockets": "HOU", "Indiana Pacers": "IND",
-    "Los Angeles Clippers": "LAC", "Los Angeles Lakers": "LAL", "Memphis Grizzlies": "MEM", "Miami Heat": "MIA",
-    "Milwaukee Bucks": "MIL", "Minnesota Timberwolves": "MIN", "New Orleans Pelicans": "NOP", "New York Knicks": "NYK",
-    "Oklahoma City Thunder": "OKC", "Orlando Magic": "ORL", "Philadelphia 76ers": "PHI", "Phoenix Suns": "PHX",
-    "Portland Trail Blazers": "POR", "Sacramento Kings": "SAC", "San Antonio Spurs": "SAS", "Toronto Raptors": "TOR",
-    "Utah Jazz": "UTA", "Washington Wizards": "WAS"
-  };
-  return map[name];
+// --- PARSING HELPERS ---
+
+function splitIncomingPicks(text) {
+  // Use a regex to split multiple picks in one cell
+  // Splits on common delimiters or the start of a new pick description
+  return text.split(/(?=\d{4} (?:first|second) round draft pick)/g)
+             .map(s => s.trim())
+             .filter(s => s.length > 10);
 }
 
-// --- HELPER: CLEAN UP THE MESSY TEXT ---
-function parseRealGMText(text) {
-  // 1. Extract Year
-  const yearMatch = text.match(/^(\d{4})/);
-  if (!yearMatch) return null;
-  const year = parseInt(yearMatch[1]);
-  if (year < 2026) return null; // Ignore old picks
-
-  // 2. Extract Round
-  const isFirst = text.toLowerCase().includes("first round");
-  const isSecond = text.toLowerCase().includes("second round");
-  if (!isFirst && !isSecond) return null;
-
-  // 3. Smart "From" Detection
-  // If it says "To [TEAM]", it's an outgoing pick (we ignore those for the asset list)
-  // We want picks the team OWNS.
-  
-  // Logic: RealGM lists "Details" for a team. 
-  // If the text starts with "2026 first round draft pick from...", it's incoming.
-  // If it says "2026 first round draft pick to...", it's outgoing.
-  
-  let from = "Own";
-  let notes = "Unprotected";
-
-  if (text.includes("from")) {
-    // Example: "2027 first round draft pick from Milwaukee"
-    const fromMatch = text.match(/from ([A-Za-z\s]+)/);
-    if (fromMatch) {
-      from = fromMatch[1].replace("the", "").trim();
-      // Shorten names
-      from = shortenTeamName(from);
-    }
+function extractFromTeam(text) {
+  const match = text.match(/from ([A-Za-z0-9 .]+)/);
+  if (match) {
+    const rawName = match[1].replace("the", "").trim().split(" ")[0];
+    return shortenName(rawName);
   }
-
-  // 4. Simplify the Notes (The "Fanspo" Look)
-  if (text.toLowerCase().includes("swap")) {
-    notes = "Swap Rights";
-  } else if (text.toLowerCase().includes("protected")) {
-    // Extract protection range if possible
-    const protMatch = text.match(/top\s(\d+)\s/i) || text.match(/(\d+)-(\d+)/);
-    notes = protMatch ? `Protected ${protMatch[0]}` : "Protected";
-  } else {
-    notes = ""; // Clean look for own picks
-  }
-
-  // Detect specific messy situations
-  if (text.includes("least favorable")) notes += " (Least Favorable)";
-  if (text.includes("most favorable")) notes += " (Most Favorable)";
-
-  return {
-    year,
-    round: isFirst ? 1 : 2,
-    from,
-    notes: notes.substring(0, 40) // Keep it short for the table
-  };
+  return "Trade";
 }
 
-function shortenTeamName(name) {
+function extractSwapPartner(text) {
+  const match = text.match(/to ([A-Za-z0-9 .]+)/);
+  return match ? shortenName(match[1].split(" ")[0]) : "Unknown";
+}
+
+function extractProtections(text) {
+  const rangeMatch = text.match(/selections? (\d+-\d+)/);
+  if (rangeMatch) return `Protected ${rangeMatch[1]}`;
+  
+  if (text.toLowerCase().includes("unprotected")) return "Unprotected";
+  if (text.toLowerCase().includes("least favorable")) return "Least Favorable";
+  
+  return "Acquired via Trade"; 
+}
+
+function shortenName(name) {
   const map = {
     "Philadelphia": "PHI", "Milwaukee": "MIL", "Chicago": "CHI", "Cleveland": "CLE",
-    "Boston": "BOS", "L.A. Clippers": "LAC", "L.A. Lakers": "LAL", "Memphis": "MEM",
-    "Atlanta": "ATL", "Miami": "MIA", "Charlotte": "CHA", "Utah": "UTA",
-    "Sacramento": "SAC", "New York": "NYK", "Los Angeles Lakers": "LAL", "Los Angeles Clippers": "LAC",
-    "San Antonio": "SAS", "Oklahoma City": "OKC", "Portland": "POR", "Minnesota": "MIN",
-    "Detroit": "DET", "Indiana": "IND", "Denver": "DEN", "Dallas": "DAL", "Phoenix": "PHX",
-    "Houston": "HOU", "New Orleans": "NOP", "Washington": "WAS", "Golden State": "GSW",
-    "Orlando": "ORL", "Toronto": "TOR", "Brooklyn": "BKN"
+    "Boston": "BOS", "L.A.": "LAC", "Memphis": "MEM", "Atlanta": "ATL", 
+    "Miami": "MIA", "Charlotte": "CHA", "Utah": "UTA", "Sacramento": "SAC", 
+    "New": "NYK", "San": "SAS", "Oklahoma": "OKC", "Portland": "POR", 
+    "Minnesota": "MIN", "Detroit": "DET", "Indiana": "IND", "Denver": "DEN", 
+    "Dallas": "DAL", "Phoenix": "PHX", "Houston": "HOU", "Washington": "WAS", 
+    "Golden": "GSW", "Orlando": "ORL", "Toronto": "TOR", "Brooklyn": "BKN"
   };
-  return map[name] || name;
+  return map[name] || name.substring(0, 3).toUpperCase();
 }
