@@ -1,8 +1,8 @@
 "use client";
 import React, { useState, useMemo } from 'react';
 // These paths point to the data files in your picks and big-board folders
-import { draftPicks } from '../picks/data'; 
-import { prospects } from '../big-board/data';
+import { draftPicks } from './picks/data'; 
+import { prospects } from './big-board/data';
 
 // Helper to get official NBA logos from a static CDN
 const getTeamLogo = (team) => `https://www.nba.com/.element/img/1.0/teams/logos/${team}.svg`;
