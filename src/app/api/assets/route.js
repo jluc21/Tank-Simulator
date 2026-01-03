@@ -3,7 +3,7 @@ import * as cheerio from 'cheerio';
 
 export const dynamic = 'force-dynamic';
 
-// 1. Team ID Map (Verified)
+// 1. Validated ID Map
 const TEAM_IDS = {
   ATL: { id: 1, slug: "atlanta-hawks" },
   BOS: { id: 2, slug: "boston-celtics" },
@@ -41,6 +41,7 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const teamCode = searchParams.get('team');
 
+  // Validate Input
   if (!teamCode || !TEAM_IDS[teamCode]) {
     return NextResponse.json({ success: false, error: 'Invalid Team Code' }, { status: 400 });
   }
@@ -49,88 +50,102 @@ export async function GET(request) {
   const url = `https://fanspo.com/nba/teams/${team.slug}/${team.id}/draft-picks`;
 
   try {
-    // 2. Fetch with "Real Browser" Headers
-    // This tricks Fanspo/Cloudflare into thinking we are a real user, not a bot.
+    // 2. Fetch with Heavy Anti-Bot Headers
     const res = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
-        'Referer': 'https://google.com',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
         'Upgrade-Insecure-Requests': '1'
       },
-      next: { revalidate: 3600 } 
+      next: { revalidate: 0 } // Disable Vercel Cache for debugging
     });
 
-    if (!res.ok) throw new Error(`Status: ${res.status}`);
+    if (!res.ok) throw new Error(`Fanspo Status: ${res.status}`);
 
     const html = await res.text();
     const $ = cheerio.load(html);
-    const picks = [];
+    let picks = [];
 
-    // Check if we got blocked (Cloudflare usually changes the title)
-    const pageTitle = $('title').text();
-    if (pageTitle.includes("Just a moment") || pageTitle.includes("Security")) {
-      throw new Error("Bot detection triggered (Cloudflare)");
+    // --- DIAGNOSTIC: Check if we are blocked ---
+    const pageTitle = $('title').text().trim();
+    const isBlocked = pageTitle.includes("Just a moment") || pageTitle.includes("Security") || pageTitle.includes("Attention Required");
+
+    if (isBlocked) {
+       console.error("BLOCKED BY CLOUDFLARE");
+       // Return a fake "empty" response with a special error note so the frontend doesn't crash
+       return NextResponse.json({
+         success: false,
+         error: "Cloudflare Blocked Request",
+         debug: { title: pageTitle }
+       });
     }
 
-    // 3. "Loose" Parsing Logic
-    // Instead of counting strict columns, we look for rows that look like draft picks.
+    // --- STRATEGY A: Standard Table Scrape ---
+    // Look for ANY table row, ignoring tbody/thead distinction
     $('tr').each((i, row) => {
-      const txt = $(row).text().trim();
-      // Only process rows that contain a future year (2025-2031)
-      if (txt.match(/202[5-9]|203[0-1]/)) {
-        
-        const cols = $(row).find('td');
-        if (cols.length >= 4) { // Accepted minimum columns
-          const col0 = $(cols[0]).text().trim(); // Year
-          const col1 = $(cols[1]).text().trim(); // Round
-          const col2 = $(cols[2]).text().trim(); // Pick # (or source)
-          const col3 = $(cols[3]).text().trim(); // Source (or notes)
-          const col4 = $(cols[4]).text().trim(); // Notes (if exists)
+      const cols = $(row).find('td');
+      // Must have at least 4 columns to be a pick row
+      if (cols.length >= 4) {
+         const yearTxt = $(cols[0]).text().trim();
+         // Check if the first column is a year 2025-2032
+         if (/^20(2[5-9]|3[0-2])$/.test(yearTxt)) {
+            const year = parseInt(yearTxt);
+            const round = $(cols[1]).text().trim();
+            const from = $(cols[3]).text().trim(); 
+            let notes = $(cols[4]).text().trim();
+            
+            // Fallback for "From" column if table structure is weird
+            const source = from || "Check Notes";
+            if (!notes) notes = "-";
+            notes = notes.replace("Protected ", "Prot ").replace(/[\n\r]+/g, " ");
 
-          const year = parseInt(col0);
-          
-          if (!isNaN(year) && year >= 2025) {
-            // Normalize data: sometimes column 2 is Pick#, sometimes it's "-"
-            let from = col3 || col2; 
-            let notes = col4 || col3;
-
-            // Simple heuristic to clean "From"
-            if (from.length > 20) from = "See Notes"; 
-
-            // Clean Notes
-            if (notes) notes = notes.replace("Protected ", "Prot ").replace(/[\n\r]+/g, " ");
-            else notes = "-";
-
-            picks.push({
-              year,
-              round: col1,
-              from: from,
-              notes: notes
-            });
-          }
-        }
+            picks.push({ year, round, from: source, notes });
+         }
       }
     });
 
+    // --- STRATEGY B: The "Nuclear" Regex Fallback ---
+    // If table scrape failed (0 picks) but we aren't blocked, try regex on the raw text.
+    // This helps if they used <div>s instead of <table>s.
+    if (picks.length === 0) {
+      const bodyText = $('body').text();
+      // Look for patterns like "2025 1 -" or "2025 Round 1"
+      // This is a simplified regex to catch the raw text format seen on Fanspo
+      const regex = /(202[5-9]|203[0-2])\s+([12])\s+(-|[A-Z]{3}|[a-zA-Z\s]+)\s+(.*?)(?=202[5-9]|203[0-2]|$)/gm;
+      
+      let match;
+      while ((match = regex.exec(bodyText)) !== null) {
+        // Simple sanity check: line shouldn't be too long (avoid capturing articles)
+        if (match[0].length < 200) {
+            picks.push({
+                year: parseInt(match[1]),
+                round: match[2],
+                from: "Extracted", // Regex can't reliably get the "From" column structure
+                notes: match[4].trim().substring(0, 50) + "..."
+            });
+        }
+      }
+    }
+
+    // Sort
     picks.sort((a, b) => a.year - b.year || a.round - b.round);
 
     return NextResponse.json({
       success: true,
       data: picks,
+      source: 'Fanspo',
       debug: {
         matches: picks.length,
-        title: pageTitle, // Helps debug if we are on the wrong page
-        url: url
+        title: pageTitle, // This will tell us if we are on the right page
+        scraped_url: url
       }
     });
 
   } catch (error) {
-    return NextResponse.json({ 
-      success: false, 
-      error: error.message,
-      hint: "If error is 'Bot detection', wait 5 mins or run locally."
-    }, { status: 500 });
+    console.error("Scrape Error:", error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
