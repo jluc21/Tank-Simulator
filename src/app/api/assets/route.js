@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
 
-// FORCE DYNAMIC: No caching. This ensures you see changes INSTANTLY.
-export const dynamic = 'force-dynamic';
+export const dynamic = 'force-dynamic'; // Force real-time data
 export const revalidate = 0;
 
 const TEAM_MAP = {
@@ -42,19 +41,14 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const teamCode = searchParams.get('team');
 
-  if (!teamCode || !TEAM_MAP[teamCode]) {
-    return NextResponse.json({ error: 'Invalid Team Code' }, { status: 400 });
-  }
+  if (!teamCode || !TEAM_MAP[teamCode]) return NextResponse.json({ error: 'Invalid Team' }, { status: 400 });
 
   try {
     const { id, slug } = TEAM_MAP[teamCode];
     const url = `https://basketball.realgm.com/nba/teams/${slug}/${id}/draft_picks`;
     
-    // FETCH WITH BROWSER HEADERS
     const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      },
+      headers: { 'User-Agent': 'Mozilla/5.0' },
       cache: 'no-store'
     });
 
@@ -62,31 +56,27 @@ export async function GET(request) {
     const html = await res.text();
     const $ = cheerio.load(html);
 
-    // INITIALIZE LEDGER (Assume they own everything)
     let assets = [];
+    // Initialize 2026-2032 Picks
     for (let y = 2026; y <= 2032; y++) {
       assets.push({ year: y, round: 1, from: "Own", notes: "Unprotected", original: true });
       assets.push({ year: y, round: 2, from: "Own", notes: "Unprotected", original: true });
     }
 
-    // FIND THE SPECIFIC TABLE BY HEADER TEXT
+    // Find the Table
     let targetTable = null;
     $('h2').each((i, el) => {
       if ($(el).text().includes("Future Traded Pick Details")) {
-        targetTable = $(el).next('div').find('table'); // RealGM often wraps tables in divs
-        if (targetTable.length === 0) targetTable = $(el).next('table');
+        targetTable = $(el).next('div').find('table');
+        if (!targetTable.length) targetTable = $(el).next('table');
       }
     });
+    if (!targetTable || targetTable.length === 0) targetTable = $('table').eq(1);
 
-    if (!targetTable) {
-        // Fallback: Just grab the second table on the page (usually the trade table)
-        targetTable = $('table').eq(1); 
-    }
-
-    // PARSE ROWS
+    // Parse Rows
     targetTable.find('tr').each((i, row) => {
       const cols = $(row).find('td');
-      if (cols.length < 3) return; // Need Year | Incoming | Outgoing
+      if (cols.length < 3) return;
 
       const year = parseInt(cols.eq(0).text().trim());
       if (isNaN(year) || year < 2026 || year > 2032) return;
@@ -94,22 +84,22 @@ export async function GET(request) {
       const incoming = cols.eq(1).text().trim();
       const outgoing = cols.eq(2).text().trim();
 
-      // LOGIC: PROCESS OUTGOING
+      // OUTGOING LOGIC
       if (outgoing && !outgoing.includes("No picks outgoing")) {
         const isFirst = outgoing.toLowerCase().includes("first round");
         const round = isFirst ? 1 : 2;
-        const idx = assets.findIndex(a => a.year === year && a.round === round && a.original);
+        const idx = assets.findIndex(a => a.year === year && a.round === round && a.from === "Own");
         
         if (idx !== -1) {
           if (outgoing.toLowerCase().includes("swap")) {
             assets[idx].notes = `Subject to Swap (${extractTeam(outgoing)})`;
           } else {
-            assets.splice(idx, 1); // Delete traded pick
+            assets.splice(idx, 1);
           }
         }
       }
 
-      // LOGIC: PROCESS INCOMING
+      // INCOMING LOGIC
       if (incoming && !incoming.includes("No picks incoming")) {
         const picks = splitPicks(incoming);
         picks.forEach(pText => {
@@ -117,20 +107,10 @@ export async function GET(request) {
           const round = isFirst ? 1 : 2;
           
           if (pText.toLowerCase().includes("swap")) {
-            const idx = assets.findIndex(a => a.year === year && a.round === round && a.original);
-            if (idx !== -1) {
-               assets[idx].notes = (assets[idx].notes === "Unprotected") 
-                  ? `Swap Rights (${extractTeam(pText)})` 
-                  : `${assets[idx].notes} & Swap (${extractTeam(pText)})`;
-            }
+            const idx = assets.findIndex(a => a.year === year && a.round === round && a.from === "Own");
+            if (idx !== -1) assets[idx].notes = `Swap Rights (${extractTeam(pText)})`;
           } else {
-            assets.push({
-              year,
-              round,
-              from: extractTeam(pText),
-              notes: extractProtections(pText),
-              original: false
-            });
+            assets.push({ year, round, from: extractTeam(pText), notes: extractProtections(pText), original: false });
           }
         });
       }
@@ -144,16 +124,6 @@ export async function GET(request) {
   }
 }
 
-// HELPERS
-function splitPicks(text) {
-  return text.split(/(?=\d{4} (?:first|second) round)/).filter(t => t.length > 10);
-}
-function extractTeam(text) {
-  const match = text.match(/from ([A-Z][a-z]+)/);
-  return match ? match[1].substring(0,3).toUpperCase() : "Trade";
-}
-function extractProtections(text) {
-  if (text.includes("unprotected")) return "Unprotected";
-  const m = text.match(/protected [0-9-]+/);
-  return m ? m[0] : "Acquired via Trade";
-}
+function splitPicks(text) { return text.split(/(?=\d{4} (?:first|second) round)/).filter(t => t.length > 10); }
+function extractTeam(text) { const m = text.match(/from ([A-Z][a-z]+)/); return m ? m[1].substring(0,3).toUpperCase() : "Trade"; }
+function extractProtections(text) { return text.includes("unprotected") ? "Unprotected" : "Acquired via Trade"; }
