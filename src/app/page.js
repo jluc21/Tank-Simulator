@@ -3,9 +3,18 @@ import React, { useState, useMemo } from 'react';
 import { draftPicks } from '../picks/data';
 import { prospects } from '../big-board/data';
 
-// Helper to get NBA Team Logos dynamically
-const getTeamLogo = (team) => `https://cdn.nba.com/logos/nba/${team === 'GSW' ? 1610612744 : 1610612737}/primary/L/logo.svg`; 
-// Note: In a real app, you'd map every team ID. For now, we use a placeholder logic.
+// Helper to get official NBA logos from a static CDN
+const getTeamLogo = (team) => `https://www.nba.com/.element/img/1.0/teams/logos/${team}.svg`;
+
+// Mapping for team-specific neon accent colors
+const TEAM_COLORS = {
+  ATL: '#E03A3E', BOS: '#007A33', BKN: '#FFFFFF', CHA: '#1D1160', CHI: '#CE1141',
+  CLE: '#860038', DAL: '#0053BC', DEN: '#0E2240', DET: '#1D428A', GSW: '#FFC72C',
+  HOU: '#CE1141', IND: '#002D62', LAC: '#C8102E', LAL: '#FDB927', MEM: '#5D76A9',
+  MIA: '#98002E', MIL: '#00471B', MIN: '#0C2340', NOP: '#002B5C', NYK: '#006BB6',
+  OKC: '#007AC1', ORL: '#0077C0', PHI: '#006BB6', PHX: '#1D1160', POR: '#E03A3E',
+  SAC: '#5A2D81', SAS: '#C4CED4', TOR: '#CE1141', UTA: '#002B5C', WAS: '#002B5C'
+};
 
 export default function DraftCommand() {
   const [selections, setSelections] = useState({});
@@ -25,80 +34,109 @@ export default function DraftCommand() {
     if (activePickIndex < allPicks2026.length - 1) setActivePickIndex(activePickIndex + 1);
   };
 
-  return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white font-sans overflow-hidden flex flex-col">
-      {/* 1. STICKY PROGRESS HEADER */}
-      <header className="h-16 border-b border-gray-800 bg-black/80 backdrop-blur-md flex items-center justify-between px-6 sticky top-0 z-50">
-        <div className="flex items-center gap-4">
-          <h1 className="text-xl font-black tracking-tighter text-green-500 uppercase italic">Mock Draft 2.0</h1>
-          <div className="h-4 w-px bg-gray-700" />
-          <p className="text-xs font-mono text-gray-400">PICK {activePickIndex + 1} OF {allPicks2026.length}</p>
-        </div>
-        <button onClick={() => {setSelections({}); setActivePickIndex(0);}} className="text-[10px] font-bold tracking-widest text-red-500 border border-red-500/30 px-3 py-1 rounded hover:bg-red-500 hover:text-white transition-all uppercase">Reset</button>
-      </header>
+  const currentTeam = allPicks2026[activePickIndex]?.team;
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* 2. SLIM DRAFT TICKER (LEFT) */}
-        <aside className="w-64 overflow-y-auto border-r border-gray-900 bg-[#050505] p-2 custom-scrollbar">
-          {allPicks2026.map((pick, index) => (
+  return (
+    <div className="flex h-screen bg-[#050505] text-white font-sans overflow-hidden">
+      
+      {/* 1. VERTICAL DRAFT TICKER (LEFT) */}
+      <aside className="w-72 bg-black border-r border-gray-800 flex flex-col">
+        <div className="p-6 border-b border-gray-800 bg-gradient-to-b from-gray-900 to-black">
+          <h1 className="text-xl font-black italic tracking-tighter uppercase text-green-500">Draft Command</h1>
+          <p className="text-[10px] font-bold text-gray-500 tracking-[0.2em] uppercase mt-1">2026 Simulation</p>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
+          {allPicks2026.map((pick, index) => {
+            const isSelected = !!selections[index];
+            const isActive = activePickIndex === index;
+            return (
+              <div 
+                key={index}
+                onClick={() => setActivePickIndex(index)}
+                className={`group relative p-3 rounded-lg flex items-center gap-3 cursor-pointer transition-all duration-200 border ${
+                  isActive ? 'bg-gray-900 border-green-500 ring-1 ring-green-500' : 'bg-transparent border-transparent hover:bg-white/5'
+                }`}
+              >
+                <span className="text-[10px] font-mono text-gray-600 w-4 font-bold">{index + 1}</span>
+                <img src={getTeamLogo(pick.team)} className="w-8 h-8 object-contain" alt={pick.team} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-tighter leading-none mb-1">{pick.team}</p>
+                  {isSelected ? (
+                    <p className="text-xs font-bold text-white truncate uppercase italic">{selections[index].name}</p>
+                  ) : (
+                    <p className="text-[10px] font-bold text-gray-600 uppercase italic">On the clock...</p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </aside>
+
+      {/* 2. PROSPECT BOARD (RIGHT) */}
+      <main className="flex-1 overflow-y-auto p-8 relative">
+        {/* Background Accent */}
+        <div 
+          className="absolute top-0 right-0 w-full h-96 opacity-10 pointer-events-none transition-colors duration-500"
+          style={{ background: `radial-gradient(circle at top right, ${TEAM_COLORS[currentTeam] || '#22c55e'}, transparent)` }}
+        />
+
+        <div className="flex justify-between items-end mb-8 relative z-10">
+          <div>
+            <h2 className="text-4xl font-black italic uppercase tracking-tighter">The War Room</h2>
+            <p className="text-gray-400 font-bold uppercase text-xs tracking-widest mt-1">
+              Selecting for: <span className="text-green-500">{currentTeam}</span>
+            </p>
+          </div>
+          <button 
+            onClick={() => {setSelections({}); setActivePickIndex(0);}}
+            className="text-[10px] font-black tracking-widest border border-red-500/50 text-red-500 px-4 py-2 rounded-full hover:bg-red-500 hover:text-white transition-all uppercase"
+          >
+            Reset Draft
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4 relative z-10">
+          {availableProspects.map((player) => (
             <div 
-              key={index}
-              onClick={() => setActivePickIndex(index)}
-              className={`relative mb-1 p-2 rounded flex items-center gap-3 cursor-pointer transition-all ${
-                activePickIndex === index ? 'bg-green-500/10 border border-green-500/50' : 'hover:bg-white/5 border border-transparent'
-              }`}
+              key={player.rank}
+              className="bg-white/5 backdrop-blur-sm border border-gray-800 rounded-xl p-5 hover:border-green-500/50 transition-all group relative overflow-hidden"
             >
-              <span className="text-[10px] font-mono text-gray-600 w-4">{index + 1}</span>
-              <div className="w-8 h-8 rounded-full bg-gray-900 border border-gray-800 flex items-center justify-center p-1.5">
-                <span className="text-[10px] font-bold text-gray-400">{pick.team}</span>
+              {/* Rank Badge */}
+              <div className="absolute -top-2 -right-2 text-6xl font-black text-white/5 group-hover:text-white/10 transition-colors italic">
+                {player.rank}
               </div>
-              <div className="flex-1 min-w-0">
-                {selections[index] ? (
-                  <p className="text-[11px] font-bold text-white truncate uppercase">{selections[index].name}</p>
-                ) : (
-                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{pick.team}</p>
-                )}
+
+              <div className="flex items-start gap-4 mb-4">
+                <img src={player.img} className="w-12 h-12 rounded bg-white p-1" alt={player.school} />
+                <div>
+                  <h3 className="text-xl font-black uppercase italic leading-none mb-1">{player.name}</h3>
+                  <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">{player.pos} • {player.team}</p>
+                </div>
               </div>
+
+              <div className="grid grid-cols-2 gap-2 mb-4 border-y border-gray-800 py-3">
+                <div>
+                  <p className="text-[10px] font-bold text-gray-500 uppercase italic">PPG</p>
+                  <p className="text-lg font-black text-green-500 font-mono leading-none">{player.stats.ppg}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-gray-500 uppercase italic">FG%</p>
+                  <p className="text-lg font-black text-white font-mono leading-none">{player.stats.fg}</p>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => handleSelect(player)}
+                className="w-full bg-white text-black font-black italic uppercase text-xs py-3 rounded-lg hover:bg-green-500 hover:text-white transition-all active:scale-[0.98]"
+              >
+                Draft into {currentTeam}
+              </button>
             </div>
           ))}
-        </aside>
-
-        {/* 3. DENSE PROSPECT GRID (RIGHT) */}
-        <main className="flex-1 overflow-y-auto p-6 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-green-900/5 via-black to-black">
-          <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
-            {availableProspects.map(player => (
-              <div key={player.rank} className="group relative bg-[#111] border border-gray-800 rounded-lg p-4 hover:border-green-500/50 transition-all hover:shadow-[0_0_20px_rgba(34,197,94,0.1)]">
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <h3 className="text-lg font-bold leading-none mb-1 group-hover:text-green-400 transition-colors uppercase">{player.name}</h3>
-                    <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">{player.position} • {player.school}</p>
-                  </div>
-                  <span className="text-2xl font-black italic text-gray-800 group-hover:text-gray-700 transition-colors">#{player.rank}</span>
-                </div>
-                
-                <div className="flex items-center justify-between border-t border-gray-800 pt-3">
-                  <div className="flex gap-4">
-                    <div className="text-center">
-                      <p className="text-[10px] text-gray-500 font-bold uppercase italic">PPG</p>
-                      <p className="text-sm font-mono font-bold text-green-500">{player.stats.ppg}</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-[10px] text-gray-500 font-bold uppercase italic">FG%</p>
-                      <p className="text-sm font-mono font-bold text-white">{player.stats.fg}</p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => handleSelect(player)}
-                    className="bg-white text-black text-[10px] font-black px-6 py-2 rounded-full hover:bg-green-500 hover:text-white transition-all transform active:scale-90 uppercase tracking-widest"
-                  >
-                    Select Pick
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </main>
-      </div>
+        </div>
+      </main>
     </div>
   );
 }
