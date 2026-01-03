@@ -1,114 +1,64 @@
 import { NextResponse } from 'next/server';
-import * as cheerio from 'cheerio';
 
 export const dynamic = 'force-dynamic';
 
-const TEAM_IDS = {
-  ATL: { id: 1, slug: "atlanta-hawks" },
-  BOS: { id: 2, slug: "boston-celtics" },
-  BKN: { id: 3, slug: "brooklyn-nets" },
-  CHA: { id: 4, slug: "charlotte-hornets" },
-  CHI: { id: 5, slug: "chicago-bulls" },
-  CLE: { id: 6, slug: "cleveland-cavaliers" },
-  DAL: { id: 7, slug: "dallas-mavericks" },
-  DEN: { id: 8, slug: "denver-nuggets" },
-  DET: { id: 9, slug: "detroit-pistons" },
-  GSW: { id: 10, slug: "golden-state-warriors" },
-  HOU: { id: 11, slug: "houston-rockets" },
-  IND: { id: 12, slug: "indiana-pacers" },
-  LAC: { id: 13, slug: "la-clippers" },
-  LAL: { id: 14, slug: "los-angeles-lakers" },
-  MEM: { id: 15, slug: "memphis-grizzlies" },
-  MIA: { id: 16, slug: "miami-heat" },
-  MIL: { id: 17, slug: "milwaukee-bucks" },
-  MIN: { id: 18, slug: "minnesota-timberwolves" },
-  NOP: { id: 19, slug: "new-orleans-pelicans" },
-  NYK: { id: 20, slug: "new-york-knicks" },
-  OKC: { id: 21, slug: "oklahoma-city-thunder" },
-  ORL: { id: 22, slug: "orlando-magic" },
-  PHI: { id: 23, slug: "philadelphia-76ers" },
-  PHX: { id: 24, slug: "phoenix-suns" },
-  POR: { id: 25, slug: "portland-trail-blazers" },
-  SAC: { id: 26, slug: "sacramento-kings" },
-  SAS: { id: 27, slug: "san-antonio-spurs" },
-  TOR: { id: 28, slug: "toronto-raptors" },
-  UTA: { id: 29, slug: "utah-jazz" },
-  WAS: { id: 30, slug: "washington-wizards" }
+// 1. Mapping for Team Abbreviations to BBGM IDs
+// Note: You can expand this to include all 30 teams
+const TEAM_MAP = {
+  ATL: 0, BOS: 1, BKN: 2, CHA: 3, CHI: 4, CLE: 5, DAL: 6, DEN: 7, 
+  DET: 8, GSW: 9, HOU: 10, IND: 11, LAC: 12, LAL: 13, MEM: 14, 
+  MIA: 15, MIL: 16, MIN: 17, NOP: 18, NYK: 19, OKC: 20, ORL: 21, 
+  PHI: 22, PHX: 23, POR: 24, SAC: 25, SAS: 26, TOR: 27, UTA: 28, WAS: 29
 };
 
-// This function hunts through the entire JSON object for any array containing 'season' and 'round'
-function findPicksRecursively(obj) {
-  if (!obj || typeof obj !== 'object') return null;
-  if (Array.isArray(obj)) {
-    const isPicksArray = obj.length > 0 && obj[0]?.season && obj[0]?.round;
-    if (isPicksArray) return obj;
-    for (const item of obj) {
-      const result = findPicksRecursively(item);
-      if (result) return result;
-    }
-  } else {
-    for (const key in obj) {
-      const result = findPicksRecursively(obj[key]);
-      if (result) return result;
-    }
-  }
-  return null;
-}
+// Map IDs back to Codes for the "FROM" column
+const ID_TO_CODE = Object.fromEntries(Object.entries(TEAM_MAP).map(([k, v]) => [v, k]));
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const teamCode = searchParams.get('team');
 
-  if (!teamCode || !TEAM_IDS[teamCode]) {
-    return NextResponse.json({ success: false, error: 'Invalid Team' }, { status: 400 });
+  if (!teamCode || TEAM_MAP[teamCode] === undefined) {
+    return NextResponse.json({ success: false, error: 'Invalid Team Code' }, { status: 400 });
   }
 
-  const { id, slug } = TEAM_IDS[teamCode];
-  const url = `https://fanspo.com/nba/teams/${slug}/${id}/draft-picks`;
+  const targetTid = TEAM_MAP[teamCode];
 
   try {
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html'
-      },
-      next: { revalidate: 3600 }
-    });
+    // 2. Fetching the BBGM Source
+    // Replace this URL with your actual BBGM JSON export or hosted endpoint
+    const url = `https://your-bbgm-data-source.com/export.json`;
+    
+    const res = await fetch(url, { next: { revalidate: 3600 } });
+    if (!res.ok) throw new Error("Could not fetch BBGM data");
 
-    const html = await res.text();
-    const $ = cheerio.load(html);
+    const bbgmExport = await res.json();
 
-    // Extract the internal JSON state Fanspo uses
-    const nextDataRaw = $('#__NEXT_DATA__').html();
-    if (!nextDataRaw) throw new Error("Fanspo blocked access or changed layout");
-
-    const json = JSON.parse(nextDataRaw);
-    const draftPicks = findPicksRecursively(json);
-
-    if (!draftPicks) throw new Error("Could not locate pick data in payload");
-
-    const assets = draftPicks
+    // 3. Precision Parsing of the Draft Picks Array
+    // BBGM stores picks in 'draftPicks'. We filter for picks currently owned by targetTid.
+    const picks = bbgmExport.draftPicks
+      .filter(pick => pick.tid === targetTid)
       .map(pick => {
-        // Identify if the pick belongs to the current team or is incoming
-        let source = "Own";
-        if (pick.original_team?.team_code && pick.original_team.team_code !== teamCode) {
-          source = pick.original_team.team_code;
-        }
+        const isIncoming = pick.originalTid !== targetTid;
+        const fromCode = isIncoming ? (ID_TO_CODE[pick.originalTid] || "Traded") : "Own";
 
         return {
-          year: parseInt(pick.season),
+          year: pick.season,
           round: pick.round,
-          from: source,
-          notes: (pick.note || pick.description || "Unprotected").replace("Protected ", "Prot ")
+          from: fromCode,
+          notes: isIncoming ? `Incoming from ${fromCode}` : "Original Pick"
         };
       })
-      .filter(a => a.year >= 2025)
+      .filter(pick => pick.year >= 2026) // Focus on future assets
       .sort((a, b) => a.year - b.year || a.round - b.round);
 
-    return NextResponse.json({ success: true, data: assets });
+    return NextResponse.json({
+      success: true,
+      data: picks
+    });
 
   } catch (error) {
-    console.error(error);
+    console.error("BBGM Read Error:", error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
