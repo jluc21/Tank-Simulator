@@ -1,111 +1,147 @@
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
 
-// Force dynamic so we can scrape on request, but we will use fetch caching heavily
+// Force dynamic prevents Next.js from building this as a static page
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+// --- UTILITY: The "Loose" Bloodhound (Your logic) ---
+// Recursively searches the Fanspo data blob for the draft picks array
+function findPicksInJSON(obj) {
+  if (!obj || typeof obj !== 'object') return null;
+
+  if (Array.isArray(obj) && obj.length > 0) {
+    const sample = obj[0];
+    // "Loose" Check: Does it have a Year and a Round?
+    if (sample && typeof sample === 'object' && 'season' in sample && 'round' in sample) {
+      return obj;
+    }
+  }
+
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      const result = findPicksInJSON(obj[key]);
+      if (result) return result;
+    }
+  }
+  return null;
+}
+
+// --- STEP 1: Discover Correct Team IDs ---
+// Fanspo IDs change (e.g. Spurs might be 2, not 27). We scrape the main list first.
+async function getTeamDirectory() {
   try {
-    // 1. Get the list of all 30 Team URLs dynamically
-    // We scrape the main teams page to find the correct ID for each team (e.g., Spurs is 2, others might be random)
-    const teamsListUrl = 'https://fanspo.com/nba/teams';
-    
-    const teamsResponse = await fetch(teamsListUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' },
-      next: { revalidate: 86400 } // Cache the team list for 24 hours
+    const res = await fetch('https://fanspo.com/nba/teams', {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
+      next: { revalidate: 86400 } // Cache list for 24 hours
     });
+    
+    if (!res.ok) throw new Error('Failed to fetch team directory');
 
-    if (!teamsResponse.ok) throw new Error('Failed to fetch team list');
+    const html = await res.text();
+    const $ = cheerio.load(html);
+    const teams = [];
 
-    const teamsHtml = await teamsResponse.text();
-    const $teams = cheerio.load(teamsHtml);
-    const teamLinks = [];
-
-    // Find all links that look like /nba/teams/[slug]/[id]
-    // The main page usually lists them in a grid or list
-    $teams('a[href^="/nba/teams/"]').each((i, el) => {
-      const href = $teams(el).attr('href');
-      const parts = href.split('/');
-      // Expected format: ["", "nba", "teams", "team-slug", "team-id"]
-      if (parts.length >= 5) {
-        // Avoid duplicate links or sub-pages (like /roster)
-        if (parts.length === 5) {
-          const name = $teams(el).text().trim();
-          const slug = parts[3];
-          const id = parts[4];
-          
-          // Deduplicate based on ID
-          if (!teamLinks.some(t => t.id === id)) {
-            teamLinks.push({ name, slug, id });
-          }
+    // Find links formatted like /nba/teams/[slug]/[id]
+    $('a[href^="/nba/teams/"]').each((_, el) => {
+      const href = $(el).attr('href');
+      const parts = href.split('/'); // ["", "nba", "teams", "slug", "id"]
+      
+      if (parts.length === 5) {
+        const slug = parts[3];
+        const id = parts[4];
+        
+        // Deduplicate
+        if (!teams.find(t => t.id === id)) {
+          teams.push({ slug, id });
         }
       }
     });
+    return teams;
+  } catch (e) {
+    console.error("Directory Error:", e);
+    return [];
+  }
+}
 
-    // 2. Fetch Draft Picks for all teams (Concurrent Fetching)
-    // We map over the teams and fire off requests.
-    // Note: 30 requests might hit a timeout on Vercel Free Tier (10s limit). 
-    // If it times out, you might need to split this or run it locally.
-    const allDraftPicks = await Promise.all(
-      teamLinks.map(async (team) => {
-        const picksUrl = `https://fanspo.com/nba/teams/${team.slug}/${team.id}/draft-picks`;
-        
-        try {
-          const res = await fetch(picksUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' },
-            next: { revalidate: 3600 } // Cache individual team data for 1 hour
-          });
-          
-          if (!res.ok) return { team: team.name, picks: [] };
-
-          const html = await res.text();
-          const $ = cheerio.load(html);
-          const picks = [];
-
-          // Parse the specific "Incoming Draft Picks" table
-          $('table tbody tr').each((i, row) => {
-            const cols = $(row).find('td');
-            if (cols.length >= 5) {
-              const year = $(cols[0]).text().trim();
-              const round = $(cols[1]).text().trim();
-              const pickNum = $(cols[2]).text().trim();
-              const from = $(cols[3]).text().trim();
-              const notes = $(cols[4]).text().trim(); // Capture the protections/swaps text
-
-              if (year && round) {
-                picks.push({
-                  year,
-                  round,
-                  pickNum: pickNum === '-' ? null : pickNum,
-                  from,
-                  notes
-                });
-              }
-            }
-          });
-
-          return {
-            team: team.slug, // e.g., 'spurs'
-            teamId: team.id,
-            data: picks
-          };
-
-        } catch (err) {
-          console.error(`Error fetching ${team.slug}:`, err);
-          return { team: team.slug, error: 'Failed to fetch' };
-        }
-      })
-    );
-
-    // 3. Return the huge JSON object
-    return NextResponse.json({
-      timestamp: new Date().toISOString(),
-      count: allDraftPicks.length,
-      teams: allDraftPicks
+// --- STEP 2: Fetch & Process Single Team ---
+async function fetchTeamPicks(team) {
+  const url = `https://fanspo.com/nba/teams/${team.slug}/${team.id}/draft-picks`;
+  
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
+      next: { revalidate: 3600 } // Cache individual team data for 1 hour
     });
 
-  } catch (error) {
-    console.error('Global scraping error:', error);
-    return NextResponse.json({ error: 'Failed to scrape data' }, { status: 500 });
+    if (!res.ok) return { team: team.slug, error: `Status ${res.status}` };
+
+    const html = await res.text();
+    const $ = cheerio.load(html);
+
+    // Grab the JSON Payload (Cleaner than parsing HTML tables)
+    const nextDataRaw = $('#__NEXT_DATA__').html();
+    if (!nextDataRaw) return { team: team.slug, error: "No Data Payload" };
+
+    const json = JSON.parse(nextDataRaw);
+    const rawPicks = findPicksInJSON(json);
+
+    if (!rawPicks) return { team: team.slug, error: "Structure changed" };
+
+    // Process the raw picks
+    const cleanPicks = rawPicks
+      .map(pick => {
+        // Determine "From"
+        let fromTeam = "Own";
+        const sourceObj = pick.original_team || pick.from_team || pick.source_team;
+        // If the source team ID is different from the current team ID, it's incoming
+        if (sourceObj && String(sourceObj.team_id) !== String(team.id)) {
+          fromTeam = sourceObj.team_code || "Traded";
+        } else if (pick.original_team_id && String(pick.original_team_id) !== String(team.id)) {
+           fromTeam = "Traded";
+        }
+
+        // Clean Notes
+        let notes = pick.note || pick.description || pick.text || "-";
+        notes = notes.replace("Protected ", "Prot ");
+
+        return {
+          year: parseInt(pick.season),
+          round: pick.round,
+          from: fromTeam,
+          notes: notes
+        };
+      })
+      .filter(p => p.year >= 2025) // Filter old picks
+      .sort((a, b) => a.year - b.year || a.round - b.round);
+
+    return {
+      team: team.slug,
+      id: team.id,
+      assets: cleanPicks
+    };
+
+  } catch (err) {
+    return { team: team.slug, error: err.message };
   }
+}
+
+// --- MAIN ROUTE ---
+export async function GET() {
+  // 1. Get the real list of teams and IDs
+  const teams = await getTeamDirectory();
+
+  if (teams.length === 0) {
+    return NextResponse.json({ error: "Could not discover teams" }, { status: 500 });
+  }
+
+  // 2. Fetch all 30 teams in parallel
+  // Note: Vercel Free tier has a 10s timeout. If this times out, slice the array (e.g., teams.slice(0, 5))
+  const allData = await Promise.all(teams.map(team => fetchTeamPicks(team)));
+
+  // 3. Return aggregated data
+  return NextResponse.json({
+    count: allData.length,
+    timestamp: new Date().toISOString(),
+    teams: allData
+  });
 }
