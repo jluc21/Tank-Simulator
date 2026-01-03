@@ -76,10 +76,10 @@ const MASTER_PLAYERS = [
   { 
     rank: 14, name: "Yaxel Lendeborg", team: "Michigan", pos: "PF", 
     stats: { ppg: "21.0", rpg: "9.6", apg: "4.8", fg: "52.0%", threePt: "38.0%" },
-    img: "https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png"
+    img: "https://s3media.247sports.com/Uploads/Assets/652/397/12397652.jpg"
   },
   
-  // --- TIER 4: MID-FIRST ROUND ---
+  // --- TIER 4: MID-FIRST ROUND (Using Placeholder to prevent wrong images) ---
   { rank: 15, name: "Chris Cenac", team: "Houston", pos: "C", stats: { ppg: "12.4", rpg: "8.5", apg: "1.2", fg: "62%", threePt: "0%" } },
   { rank: 16, name: "Meleek Thomas", team: "Arkansas", pos: "SG", stats: { ppg: "15.8", rpg: "4.2", apg: "3.1", fg: "45%", threePt: "37%" } },
   { rank: 17, name: "Jalen Haralson", team: "Notre Dame", pos: "SF", stats: { ppg: "14.2", rpg: "5.5", apg: "4.0", fg: "48%", threePt: "34%" } },
@@ -97,7 +97,7 @@ const MASTER_PLAYERS = [
   { rank: 29, name: "Jalil Bethea", team: "Miami", pos: "SG", stats: { ppg: "16.8", rpg: "3.2", apg: "2.0", fg: "44%", threePt: "40%" } },
   { rank: 30, name: "Ian Jackson", team: "UNC", pos: "SG", stats: { ppg: "15.5", rpg: "4.0", apg: "2.8", fg: "47%", threePt: "35%" } },
 
-  // --- TIER 5: LATE FIRST / EARLY SECOND ---
+  // --- TIER 5: THE REST ---
   { rank: 31, name: "Drake Powell", team: "UNC", pos: "SF", stats: { ppg: "12.4", rpg: "6.0", apg: "3.2", fg: "51%", threePt: "34%" } },
   { rank: 32, name: "Derrion Reid", team: "Alabama", pos: "SF", stats: { ppg: "13.0", rpg: "5.5", apg: "2.0", fg: "49%", threePt: "36%" } },
   { rank: 33, name: "Aiden Sherrell", team: "Alabama", pos: "C", stats: { ppg: "10.2", rpg: "7.5", apg: "0.9", fg: "60%", threePt: "28%" } },
@@ -165,6 +165,9 @@ export default function BigBoardPage() {
                 {/* IMAGE */}
                 <div className="w-16 md:w-20 flex justify-center">
                    <div className="relative group">
+                     {/* LOGIC: Use verified image for Top 14. 
+                         Use Generic Silhouette for 15+ to prevent "Football Player" glitch.
+                     */}
                      <img 
                        src={player.img || "https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png"} 
                        alt={player.name} 
