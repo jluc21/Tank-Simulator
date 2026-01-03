@@ -1,9 +1,10 @@
 "use client";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
-// --- THE MASTER 61 (2026 NBA DRAFT CLASS) ---
+// --- THE MASTER LIST (61 PROSPECTS) ---
+// We hardcode the images here so they NEVER break.
 const MASTER_PLAYERS = [
-  // --- TIER 1: THE FRANCHISE CHANGERS ---
+  // --- TIER 1: THE LOTTERY ---
   { 
     rank: 1, name: "Darryn Peterson", team: "Kansas", pos: "G", 
     stats: { ppg: "19.3", rpg: "3.8", apg: "2.8", fg: "52.8%", threePt: "42.3%" },
@@ -19,8 +20,6 @@ const MASTER_PLAYERS = [
     stats: { ppg: "23.1", rpg: "7.2", apg: "3.8", fg: "59.1%", threePt: "33.3%" },
     img: "https://s3media.247sports.com/Uploads/Assets/822/283/12283822.jpg"
   },
-  
-  // --- TIER 2: TOP 10 LOCKS ---
   { 
     rank: 4, name: "Caleb Wilson", team: "UNC", pos: "PF", 
     stats: { ppg: "21.7", rpg: "11.0", apg: "5.0", fg: "54.0%", threePt: "36.0%" },
@@ -56,8 +55,6 @@ const MASTER_PLAYERS = [
     stats: { ppg: "23.7", rpg: "7.2", apg: "2.7", fg: "49.0%", threePt: "36.0%" },
     img: "https://s3media.247sports.com/Uploads/Assets/479/931/11931479.jpg"
   },
-
-  // --- TIER 3: LOTTERY ---
   { 
     rank: 11, name: "Jayden Quaintance", team: "Arizona St", pos: "C", 
     stats: { ppg: "11.2", rpg: "14.4", apg: "1.2", fg: "60.0%", threePt: "0.0%" },
@@ -76,10 +73,10 @@ const MASTER_PLAYERS = [
   { 
     rank: 14, name: "Yaxel Lendeborg", team: "Michigan", pos: "PF", 
     stats: { ppg: "21.0", rpg: "9.6", apg: "4.8", fg: "52.0%", threePt: "38.0%" },
-    img: "https://s3media.247sports.com/Uploads/Assets/652/397/12397652.jpg"
+    img: "https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png"
   },
-  
-  // --- TIER 4: MID-FIRST ROUND (Using Placeholder to prevent wrong images) ---
+
+  // --- TIER 4: MID-FIRST ROUND ---
   { rank: 15, name: "Chris Cenac", team: "Houston", pos: "C", stats: { ppg: "12.4", rpg: "8.5", apg: "1.2", fg: "62%", threePt: "0%" } },
   { rank: 16, name: "Meleek Thomas", team: "Arkansas", pos: "SG", stats: { ppg: "15.8", rpg: "4.2", apg: "3.1", fg: "45%", threePt: "37%" } },
   { rank: 17, name: "Jalen Haralson", team: "Notre Dame", pos: "SF", stats: { ppg: "14.2", rpg: "5.5", apg: "4.0", fg: "48%", threePt: "34%" } },
@@ -132,22 +129,43 @@ const MASTER_PLAYERS = [
 ];
 
 export default function BigBoardPage() {
-  const [players] = useState(MASTER_PLAYERS); 
+  const [players, setPlayers] = useState(MASTER_PLAYERS);
+  const [lastUpdated, setLastUpdated] = useState("Loading live stats...");
+
+  useEffect(() => {
+    async function fetchLiveStats() {
+      try {
+        const res = await fetch('/api/stats');
+        const liveData = await res.json();
+        
+        if (liveData && liveData.length > 0) {
+          const updated = MASTER_PLAYERS.map(p => {
+            const live = liveData.find(l => l.name === p.name);
+            // CRITICAL FIX: Only update the STATS. 
+            // Do NOT update the image (p.img), because our hardcoded images are better.
+            return live ? { ...p, stats: live.stats } : p;
+          });
+          setPlayers(updated);
+          setLastUpdated("Live Updates • 2025-26 Season");
+        }
+      } catch (error) {
+        setLastUpdated("Offline Mode • 2026 Projections");
+      }
+    }
+    fetchLiveStats();
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50 text-black font-sans pb-20">
-      
-      {/* HEADER */}
       <div className="border-b-4 border-orange-500 bg-white pt-8 pb-4 px-4 text-center sticky top-0 z-40 shadow-sm">
         <h1 className="text-3xl md:text-5xl font-light text-gray-800 tracking-tight">
           2026 NBA Draft <span className="font-bold">Big Board</span>
         </h1>
-        <p className="text-gray-500 text-xs md:text-sm mt-2 uppercase tracking-widest font-semibold">
-          Top 61 Prospects • Live 2025-26 Season Data
+        <p className="text-gray-500 text-xs md:text-sm mt-2 uppercase tracking-widest font-semibold animate-pulse">
+          {lastUpdated}
         </p>
       </div>
 
-      {/* TABLE */}
       <div className="max-w-7xl mx-auto px-2 md:px-4 mt-8">
         <div className="bg-orange-600 text-white text-center py-2 font-bold text-sm uppercase tracking-widest rounded-t shadow-md">
           Consensus Rankings
@@ -165,9 +183,7 @@ export default function BigBoardPage() {
                 {/* IMAGE */}
                 <div className="w-16 md:w-20 flex justify-center">
                    <div className="relative group">
-                     {/* LOGIC: Use verified image for Top 14. 
-                         Use Generic Silhouette for 15+ to prevent "Football Player" glitch.
-                     */}
+                     {/* The fallback image is a clean silhouette so we never show broken icons */}
                      <img 
                        src={player.img || "https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png"} 
                        alt={player.name} 
@@ -186,14 +202,11 @@ export default function BigBoardPage() {
                    </div>
                 </div>
 
-                {/* STATS (Expanded View) */}
+                {/* STATS */}
                 <div className="w-full md:w-auto text-center md:text-right pr-0 md:pr-6 flex flex-col items-center md:items-end gap-1">
-                   {/* Main Stat (PPG) */}
                    <div className="text-2xl font-bold text-green-600 leading-none">
                      {player.stats.ppg} <span className="text-xs text-green-800 font-normal">PPG</span>
                    </div>
-                   
-                   {/* Sub Stats Row */}
                    <div className="flex gap-3 text-xs text-gray-500 font-mono bg-gray-50 px-2 py-1 rounded border border-gray-100">
                      <div><span className="font-bold text-gray-700">{player.stats.rpg}</span> REB</div>
                      <div className="w-px bg-gray-300"></div>
