@@ -1,77 +1,106 @@
-import React from 'react';
+"use client";
+import React, { useState, useEffect } from 'react';
 
-// SERVER FETCH: This happens behind the scenes. It's the only way to 
-// guarantee the teams show up without being blocked by your browser.
-async function getLiveStandings() {
-  try {
-    const res = await fetch(
-      'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/standings',
-      { cache: 'no-store' } 
-    );
-    const data = await res.json();
+export default function RebuildWatchHome() {
+  const [standings, setStandings] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-    return data.children[0].standings.entries.map((entry) => ({
-      name: entry.team.displayName,
-      logo: entry.team.logos[0].href,
-      record: entry.stats.find(s => s.name === 'summary')?.displayValue || '0-0',
-      winPct: entry.stats.find(s => s.name === 'winPercent')?.displayValue || '.000',
-      streak: entry.stats.find(s => s.name === 'streak')?.displayValue || '-',
-    })).sort((a, b) => parseFloat(a.winPct) - parseFloat(b.winPct)).slice(0, 14);
-  } catch (err) {
-    return []; 
-  }
-}
+  // 1. Fetch live NBA standings from ESPN's public API
+  useEffect(() => {
+    async function fetchStandings() {
+      try {
+        // Using a proxy to bypass browser security (CORS) blocks
+        const res = await fetch('https://corsproxy.io/?https://site.api.espn.com/apis/site/v2/sports/basketball/nba/standings');
+        const data = await res.json();
+        
+        // Map ESPN's real-time data to our table
+        const teams = data.children[0].standings.entries.map((entry) => ({
+          name: entry.team.displayName,
+          logo: entry.team.logos[0].href,
+          record: entry.stats.find(s => s.name === 'summary')?.displayValue || '0-0',
+          winPct: entry.stats.find(s => s.name === 'winPercent')?.displayValue || '.000',
+          streak: entry.stats.find(s => s.name === 'streak')?.displayValue || 'N/A'
+        }));
 
-export default async function Home() {
-  const standings = await getLiveStandings();
+        // Sort by win percentage (worst to best) for the lottery order
+        const lotteryOrder = teams.sort((a, b) => parseFloat(a.winPct) - parseFloat(b.winPct)).slice(0, 14);
+        
+        setStandings(lotteryOrder);
+        setLoading(false);
+      } catch (err) {
+        console.error("ESPN API Sync Failed:", err);
+        setLoading(false);
+      }
+    }
+    fetchStandings();
+  }, []);
+
+  // 2. Simulation Logic
+  const simulateLottery = () => {
+    // Simple shuffle for the simulation
+    const shuffled = [...standings].sort(() => Math.random() - 0.5);
+    setStandings(shuffled);
+  };
+
+  if (loading) return (
+    <div className="flex h-screen items-center justify-center bg-[#f5f5f5]">
+      <p className="text-[#2f3e4e] font-black uppercase tracking-[0.2em] animate-pulse">Syncing Live Standings...</p>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-[#f5f5f5] p-6 md:p-12 font-sans text-[#2f3e4e]">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-[#f5f5f5] p-6 font-sans text-[#2f3e4e]">
+      <div className="max-w-5xl mx-auto">
         
-        {/* TANKATHON STYLE HEADER */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-light mb-8">
+        {/* HEADER CONTROLS */}
+        <div className="text-center mb-10">
+          <h1 className="text-4xl font-black uppercase italic tracking-tighter mb-8">
             2026 NBA Draft Lottery Simulator
           </h1>
           
-          <div className="flex justify-center gap-2">
-            <button className="bg-[#2f3e4e] text-white px-10 py-2 rounded font-bold uppercase tracking-widest shadow-xl">
+          <div className="flex justify-center gap-4">
+            <button 
+              onClick={simulateLottery}
+              className="bg-[#2f3e4e] text-white px-10 py-3 rounded-lg font-bold uppercase tracking-widest hover:bg-black transition-all shadow-xl"
+            >
               Sim Lottery
             </button>
-            <button className="bg-[#9ea3a8] text-white px-10 py-2 rounded font-bold uppercase tracking-widest shadow-md">
+            <button 
+              onClick={() => window.location.reload()}
+              className="bg-[#9ea3a8] text-white px-10 py-3 rounded-lg font-bold uppercase tracking-widest hover:bg-[#2f3e4e] transition-all shadow-md"
+            >
               Reset
             </button>
           </div>
         </div>
 
-        {/* THE TABLE: This will now load INSTANTLY because of the server fetch */}
-        <div className="bg-white border-t-2 border-[#2f3e4e] shadow-sm">
-          <table className="w-full text-left text-sm">
+        {/* DATA TABLE */}
+        <div className="bg-white border-t-4 border-[#2f3e4e] shadow-lg overflow-hidden">
+          <table className="w-full text-left">
             <thead>
-              <tr className="text-[11px] font-bold uppercase border-b border-[#d1d1d1] text-[#2f3e4e]">
-                <th className="px-4 py-3">Pick</th>
-                <th className="px-4 py-3">Team</th>
-                <th className="px-4 py-3 text-center">Record</th>
-                <th className="px-4 py-3 text-center">Win%</th>
-                <th className="px-4 py-3 text-center">Streak</th>
-                <th className="px-4 py-3 text-right">#1 OVR</th>
+              <tr className="text-[11px] font-black uppercase border-b border-[#d1d1d1] text-[#9ea3a8]">
+                <th className="px-6 py-4">Pick</th>
+                <th className="px-6 py-4">Team</th>
+                <th className="px-6 py-4 text-center">Record</th>
+                <th className="px-6 py-4 text-center">Win%</th>
+                <th className="px-6 py-4 text-center">Streak</th>
+                <th className="px-6 py-4 text-right">#1 Odds</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#f5f5f5]">
               {standings.map((team, i) => (
-                <tr key={team.name} className="hover:bg-[#fcfcfc]">
-                  <td className="px-4 py-3 font-medium text-[#9ea3a8]">{i + 1}</td>
-                  <td className="px-4 py-3 flex items-center gap-3">
-                    <img src={team.logo} className="w-6 h-6 object-contain" alt="" />
-                    <span className="font-bold">{team.name}</span>
+                <tr key={team.name} className="hover:bg-[#fcfcfc] transition-colors">
+                  <td className="px-6 py-4 text-xl font-black text-[#d1d1d1]">{i + 1}</td>
+                  <td className="px-6 py-4 flex items-center gap-4">
+                    <img src={team.logo} className="w-8 h-8 object-contain" alt="" />
+                    <span className="font-bold text-[#2f3e4e] uppercase">{team.name}</span>
                   </td>
-                  <td className="px-4 py-3 text-center text-[#9ea3a8]">{team.record}</td>
-                  <td className="px-4 py-3 text-center text-[#9ea3a8]">{team.winPct}</td>
-                  <td className={`px-4 py-3 text-center font-bold ${team.streak.includes('W') ? 'text-green-600' : 'text-red-500'}`}>
+                  <td className="px-6 py-4 text-center font-mono font-bold text-[#9ea3a8]">{team.record}</td>
+                  <td className="px-6 py-4 text-center font-mono font-bold text-[#9ea3a8]">{team.winPct}</td>
+                  <td className={`px-6 py-4 text-center font-black uppercase ${team.streak.includes('W') ? 'text-green-600' : 'text-red-500'}`}>
                     {team.streak}
                   </td>
-                  <td className="px-4 py-3 text-right font-bold">
+                  <td className="px-6 py-4 text-right font-black text-xl">
                     {i < 3 ? '14.0%' : i === 3 ? '12.5%' : '---'}
                   </td>
                 </tr>
