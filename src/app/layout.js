@@ -1,44 +1,42 @@
-import './globals.css';
-import Link from 'next/link';
+import './globals.css'
+import { Inter } from 'next/font/google'
+
+// Using Inter as a clean, modern font. Feel free to change.
+const inter = Inter({ subsets: ['latin'] })
 
 export const metadata = {
-  title: 'Tank Simulator',
-  description: 'NBA Tanking Simulator',
-};
+  title: 'Rebuild Watch',
+  description: 'NBA Draft Simulator & Lottery Odds',
+}
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
-      <body className="antialiased bg-gray-900">
+    <html lang="en" className="h-full">
+      {/* Applying base theme classes to the body:
+        - bg-theme-main: Sets the global dark background.
+        - text-theme-primary: Sets the default white text color.
+      */}
+      <body className={`${inter.className} bg-theme-main text-theme-primary min-h-screen flex flex-col`}>
         
-        {/* GLOBAL NAVIGATION BAR */}
-        <nav className="bg-black border-b border-gray-800 p-4 sticky top-0 z-50">
-          <div className="max-w-5xl mx-auto flex justify-between items-center">
-            {/* LOGO */}
-            <div className="font-black text-xl tracking-tighter text-white">
-              TANK<span className="text-emerald-500">SIM</span>
-            </div>
-            
-            {/* NAVIGATION LINKS */}
-            <div className="flex gap-6 text-sm font-bold uppercase tracking-wide">
-              <Link href="/" className="text-gray-400 hover:text-white transition-colors">
-                Lotto Odds
-              </Link>
-              <Link href="/big-board" className="text-gray-400 hover:text-white transition-colors">
-                Big Board
-              </Link>
-              <Link href="/picks" className="text-gray-400 hover:text-white transition-colors">
-                Team Assets
-              </Link>
-              <Link href="/mock-draft" className="text-gray-400 hover:text-white transition-colors">
-                Mock Draft
-              </Link>
-            </div>
+        {/* A simple placeholder Navbar - replace with your actual Navbar component */}
+        <nav className="flex items-center justify-between p-4 bg-theme-secondary border-b border-theme-secondary">
+          <div className="font-black text-xl tracking-tighter">
+            <span className="text-theme-blue">TANK</span>SIM
+          </div>
+          <div className="space-x-6 text-sm font-bold text-theme-secondary">
+            <a href="/" className="hover:text-theme-primary transition">LOTTO ODDS</a>
+            <a href="/big-board" className="hover:text-theme-primary transition">BIG BOARD</a>
+            <a href="/team-assets" className="hover:text-theme-primary transition">TEAM ASSETS</a>
+            <a href="/mock-draft" className="text-theme-green transition">MOCK DRAFT</a>
           </div>
         </nav>
 
-        {children}
+        {/* Main content area */}
+        <main className="flex-1">
+          {children}
+        </main>
+        
       </body>
     </html>
-  );
+  )
 }
