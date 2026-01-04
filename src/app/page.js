@@ -1,42 +1,84 @@
-// --- SERVER COMPONENT ---
-// This handles the data fetch on the server to bypass browser CORS blocks
-async function getLiveNBAStandings() {
-  try {
-    const res = await fetch(
-      'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/standings',
-      { cache: 'no-store' } // Ensures fresh standings on every visit
-    );
-    
-    if (!res.ok) return [];
-    const data = await res.json();
+import React from 'react';
 
-    // Map the real-time ESPN data
-    const teams = data.children[0].standings.entries.map((entry) => ({
-      name: entry.team.displayName,
-      logo: entry.team.logos[0].href,
-      record: entry.stats.find(s => s.name === 'summary').displayValue,
-      winPct: entry.stats.find(s => s.name === 'winPercent').displayValue,
-      streak: entry.stats.find(s => s.name === 'streak')?.displayValue || '-',
-    }));
+// 1. DATA FETCH: This happens on the server so it's instant and avoids CORS blocks
+async function getLiveStandings() {
+  const res = await fetch(
+    'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/standings',
+    { cache: 'no-store' } // Forces fresh data on every visit
+  );
+  const data = await res.json();
 
-    // Sort by worst win percentage for the lottery (Bottom 14)
-    return teams.sort((a, b) => parseFloat(a.winPct) - parseFloat(b.winPct)).slice(0, 14);
-  } catch (error) {
-    console.error("ESPN Data Fetch Failed:", error);
-    return [];
-  }
+  // Map ESPN data to our table format
+  return data.children[0].standings.entries.map((entry) => ({
+    name: entry.team.displayName,
+    logo: entry.team.logos[0].href,
+    record: entry.stats.find(s => s.name === 'summary').displayValue,
+    winPct: entry.stats.find(s => s.name === 'winPercent').displayValue,
+    streak: entry.stats.find(s => s.name === 'streak')?.displayValue || '-',
+  })).sort((a, b) => parseFloat(a.winPct) - parseFloat(b.winPct)).slice(0, 14);
 }
 
-import LotteryTable from './LotteryTable';
-
-export default async function RebuildWatchHome() {
-  const liveTeams = await getLiveNBAStandings();
+// 2. MAIN PAGE
+export default async function Home() {
+  const standings = await getLiveStandings();
 
   return (
-    <div className="min-h-screen bg-[#f5f5f5] p-6 font-sans">
-      <div className="max-w-4xl mx-auto">
-        {/* Pass the live data to our interactive client component */}
-        <LotteryTable initialTeams={liveTeams} />
+    <div className="min-h-screen bg-[#f5f5f5] p-4 md:p-10 font-sans">
+      <div className="max-w-5xl mx-auto">
+        
+        {/* CENTERED HEADER & BUTTONS (EXACT TANKATHON STYLE) */}
+        <div className="text-center mb-12">
+          <h1 className="text-4xl md:text-5xl font-light text-[#2f3e4e] mb-8">
+            2026 NBA Draft Lottery Simulator
+          </h1>
+          
+          <div className="flex justify-center gap-2">
+            <button className="bg-[#2f3e4e] text-white px-10 py-2 rounded font-bold uppercase tracking-widest hover:bg-[#1a252f]">
+              Sim Lottery
+            </button>
+            <button className="bg-[#9ea3a8] text-white px-10 py-2 rounded font-bold uppercase tracking-widest hover:bg-[#2f3e4e]">
+              Reset
+            </button>
+          </div>
+        </div>
+
+        {/* DATA TABLE */}
+        <div className="bg-white border-t-2 border-[#2f3e4e]">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="text-[11px] font-bold text-[#2f3e4e] uppercase border-b border-[#d1d1d1]">
+                <th className="px-4 py-3">Pick</th>
+                <th className="px-4 py-3">Team</th>
+                <th className="px-4 py-3 text-center">Record</th>
+                <th className="px-4 py-3 text-center">Win%</th>
+                <th className="px-4 py-3 text-center">Streak</th>
+                <th className="px-4 py-3 text-right">#1 OVR</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#f5f5f5]">
+              {standings.map((team, i) => (
+                <tr key={team.name} className="hover:bg-[#fcfcfc] transition-colors">
+                  <td className="px-4 py-3 font-medium text-[#9ea3a8]">{i + 1}</td>
+                  <td className="px-4 py-3 flex items-center gap-3">
+                    <img src={team.logo} className="w-6 h-6 object-contain" alt="" />
+                    <span className="font-bold text-[#2f3e4e]">{team.name}</span>
+                  </td>
+                  <td className="px-4 py-3 text-center text-[#9ea3a8]">{team.record}</td>
+                  <td className="px-4 py-3 text-center text-[#9ea3a8]">{team.winPct}</td>
+                  <td className={`px-4 py-3 text-center font-bold ${team.streak.includes('W') ? 'text-green-600' : 'text-red-500'}`}>
+                    {team.streak}
+                  </td>
+                  <td className="px-4 py-3 text-right font-bold text-[#2f3e4e]">
+                    {i < 3 ? '14.0%' : i === 3 ? '12.5%' : '---'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="bg-[#f5f5f5] text-center py-2 text-[10px] font-bold text-[#9ea3a8] uppercase tracking-[0.3em]">
+            End of Lottery
+          </div>
+        </div>
       </div>
     </div>
   );
