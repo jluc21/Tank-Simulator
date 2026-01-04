@@ -1,41 +1,27 @@
 import './globals.css'
 import { Inter } from 'next/font/google'
 
-// Using Inter as a clean, modern font. Feel free to change.
 const inter = Inter({ subsets: ['latin'] })
-
-export const metadata = {
-  title: 'Rebuild Watch',
-  description: 'NBA Draft Simulator & Lottery Odds',
-}
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className="h-full">
-      {/* Applying base theme classes to the body:
-        - bg-theme-main: Sets the global dark background.
-        - text-theme-primary: Sets the default white text color.
-      */}
-      <body className={`${inter.className} bg-theme-main text-theme-primary min-h-screen flex flex-col`}>
-        
-        {/* A simple placeholder Navbar - replace with your actual Navbar component */}
-        <nav className="flex items-center justify-between p-4 bg-theme-secondary border-b border-theme-secondary">
-          <div className="font-black text-xl tracking-tighter">
-            <span className="text-theme-blue">TANK</span>SIM
+    <html lang="en">
+      <body className={`${inter.className} bg-[#f5f5f5] text-[#2f3e4e]`}>
+        {/* --- MASTER NAVIGATION MENU --- */}
+        <nav className="bg-[#2f3e4e] text-white px-8 py-4 flex justify-between items-center shadow-lg sticky top-0 z-50">
+          <div className="text-xl font-black tracking-tighter uppercase italic">
+            Rebuild <span className="text-[#9ea3a8]">Watch</span>
           </div>
-          <div className="space-x-6 text-sm font-bold text-theme-secondary">
-            <a href="/" className="hover:text-theme-primary transition">LOTTO ODDS</a>
-            <a href="/big-board" className="hover:text-theme-primary transition">BIG BOARD</a>
-            <a href="/team-assets" className="hover:text-theme-primary transition">TEAM ASSETS</a>
-            <a href="/mock-draft" className="text-theme-green transition">MOCK DRAFT</a>
+          <div className="flex gap-8 text-xs font-bold tracking-widest uppercase">
+            <a href="/" className="hover:text-[#d1d1d1] transition">Lotto Odds</a>
+            <a href="/big-board" className="hover:text-[#d1d1d1] transition">Big Board</a>
+            <a href="/team-assets" className="hover:text-[#d1d1d1] transition">Team Assets</a>
+            <a href="/mock-draft" className="text-[#9ea3a8] transition border-b border-[#9ea3a8]">Mock Draft</a>
           </div>
         </nav>
 
-        {/* Main content area */}
-        <main className="flex-1">
-          {children}
-        </main>
-        
+        {/* This renders the content of individual pages */}
+        <main>{children}</main>
       </body>
     </html>
   )
