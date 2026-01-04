@@ -5,15 +5,16 @@ export default function RebuildWatchHome() {
   const [standings, setStandings] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // 1. Fetch live NBA standings from ESPN's public API
   useEffect(() => {
     async function fetchStandings() {
       try {
-        // We use the direct ESPN endpoint that worked for you before
-        const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/basketball/nba/standings');
+        // We use a proxy to prevent the browser from blocking the ESPN API
+        const proxy = "https://corsproxy.io/?";
+        const target = encodeURIComponent("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/standings");
+        
+        const res = await fetch(proxy + target);
         const data = await res.json();
         
-        // Extract teams and map them to our lottery table format
         const teams = data.children[0].standings.entries.map((entry) => ({
           name: entry.team.displayName,
           logo: entry.team.logos[0].href,
@@ -22,25 +23,24 @@ export default function RebuildWatchHome() {
           streak: entry.stats.find(s => s.name === 'streak')?.displayValue || 'N/A'
         }));
 
-        // Sort by win percentage (worst to best) and take the top 14 lottery teams
+        // Tankathon Style: Worst records at the top for the lottery
         const lotteryOrder = teams.sort((a, b) => parseFloat(a.winPct) - parseFloat(b.winPct)).slice(0, 14);
         
         setStandings(lotteryOrder);
         setLoading(false);
       } catch (err) {
-        console.error("ESPN API Sync Failed:", err);
+        console.error("ESPN Sync Failed:", err);
+        setLoading(false);
       }
     }
     fetchStandings();
   }, []);
 
-  // 2. Simple simulation logic
   const simulateLottery = () => {
     const shuffled = [...standings].sort(() => Math.random() - 0.5);
     setStandings(shuffled);
   };
 
-  // 3. Loading state to ensure we don't show an empty table
   if (loading) return (
     <div className="flex h-[80vh] items-center justify-center bg-[#f5f5f5]">
       <div className="text-center">
