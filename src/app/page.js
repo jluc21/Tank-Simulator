@@ -1,8 +1,8 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
-// ALL 30 NBA TEAMS - Hardcoded to ensure it NEVER fails or shows a blank table
-const NBA_DATA = [
+// SAFETY NET DATA: Used if the API is blocked or slow
+const INITIAL_NBA_DATA = [
   { name: "Detroit Pistons", logo: "https://a.espncdn.com/i/teamlogos/nba/500/det.png", record: "10-25", winPct: ".286", streak: "L2" },
   { name: "Washington Wizards", logo: "https://a.espncdn.com/i/teamlogos/nba/500/was.png", record: "11-24", winPct: ".314", streak: "W1" },
   { name: "Charlotte Hornets", logo: "https://a.espncdn.com/i/teamlogos/nba/500/cha.png", record: "12-23", winPct: ".343", streak: "L1" },
@@ -36,10 +36,38 @@ const NBA_DATA = [
 ];
 
 export default function Home() {
-  const [standings, setStandings] = useState(NBA_DATA);
+  const [standings, setStandings] = useState(INITIAL_NBA_DATA);
+  const [syncLabel, setSyncLabel] = useState("Loading Manual Backup...");
+
+  // AUTOMATIC SYNC: Overwrites hardcoded data with live ESPN data
+  useEffect(() => {
+    async function syncWithESPN() {
+      try {
+        const cacheBuster = Date.now();
+        // Using a reliable proxy to ensure the browser doesn't block the request
+        const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent('https://site.api.espn.com/apis/site/v2/sports/basketball/nba/standings')}?cb=${cacheBuster}`);
+        const json = await res.json();
+        const data = JSON.parse(json.contents);
+        
+        const liveTeams = data.children[0].standings.entries.map((entry) => ({
+          name: entry.team.displayName,
+          logo: entry.team.logos[0].href,
+          record: entry.stats.find(s => s.name === 'summary')?.displayValue || '0-0',
+          winPct: entry.stats.find(s => s.name === 'winPercent')?.displayValue || '.000',
+          streak: entry.stats.find(s => s.name === 'streak')?.displayValue || '-',
+        }));
+
+        // Sort by win percentage (Worst to Best)
+        setStandings(liveTeams.sort((a, b) => parseFloat(a.winPct) - parseFloat(b.winPct)));
+        setSyncLabel("Real-Time Data Synced Via ESPN API");
+      } catch (err) {
+        setSyncLabel("Manual Data Sync (2026 Season Records)");
+      }
+    }
+    syncWithESPN();
+  }, []);
 
   const simulate = () => {
-    // Shuffles the lottery teams (Top 14)
     const lottery = [...standings.slice(0, 14)].sort(() => Math.random() - 0.5);
     const nonLottery = [...standings.slice(14)];
     setStandings([...lottery, ...nonLottery]);
@@ -52,7 +80,7 @@ export default function Home() {
           <h1 className="text-4xl md:text-6xl font-light mb-10 tracking-tight">2026 NBA Draft Lottery Simulator</h1>
           <div className="flex justify-center gap-4">
             <button onClick={simulate} className="bg-[#2f3e4e] text-white px-12 py-3 rounded font-black uppercase tracking-widest shadow-xl transition-all active:scale-95">Sim Lottery</button>
-            <button onClick={() => setStandings(NBA_DATA)} className="bg-[#9ea3a8] text-white px-12 py-3 rounded font-black uppercase tracking-widest shadow-md">Reset</button>
+            <button onClick={() => window.location.reload()} className="bg-[#9ea3a8] text-white px-12 py-3 rounded font-black uppercase tracking-widest shadow-md">Reset</button>
           </div>
         </div>
 
@@ -71,7 +99,7 @@ export default function Home() {
             <tbody className="divide-y divide-[#f5f5f5]">
               {standings.map((team, i) => (
                 <React.Fragment key={team.name}>
-                  <tr className="hover:bg-[#fcfcfc] transition-colors">
+                  <tr className="hover:bg-[#fcfcfc] transition-colors border-l-4 border-transparent hover:border-l-[#2f3e4e]">
                     <td className="px-6 py-4 font-bold text-[#d1d1d1]">{i + 1}</td>
                     <td className="px-6 py-4 flex items-center gap-4">
                       <img src={team.logo} className="w-8 h-8 object-contain" alt="" />
@@ -92,7 +120,7 @@ export default function Home() {
             </tbody>
           </table>
         </div>
-        <p className="text-center mt-10 text-[10px] font-bold text-[#9ea3a8] uppercase tracking-widest italic">Manual Data Sync (2026 Season Records)</p>
+        <p className="text-center mt-10 text-[10px] font-bold text-[#9ea3a8] uppercase tracking-widest italic">{syncLabel}</p>
       </div>
     </div>
   );
