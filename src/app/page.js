@@ -1,34 +1,37 @@
 import React from 'react';
 
-// 1. DATA FETCH: This happens on the server so it's instant and avoids CORS blocks
+// This function runs on the server to get live data before the page loads
 async function getLiveStandings() {
-  const res = await fetch(
-    'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/standings',
-    { cache: 'no-store' } // Forces fresh data on every visit
-  );
-  const data = await res.json();
+  try {
+    const res = await fetch(
+      'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/standings',
+      { next: { revalidate: 3600 } } // Updates every hour
+    );
+    const data = await res.json();
 
-  // Map ESPN data to our table format
-  return data.children[0].standings.entries.map((entry) => ({
-    name: entry.team.displayName,
-    logo: entry.team.logos[0].href,
-    record: entry.stats.find(s => s.name === 'summary').displayValue,
-    winPct: entry.stats.find(s => s.name === 'winPercent').displayValue,
-    streak: entry.stats.find(s => s.name === 'streak')?.displayValue || '-',
-  })).sort((a, b) => parseFloat(a.winPct) - parseFloat(b.winPct)).slice(0, 14);
+    // Mapping the ESPN data into the Tankathon format
+    return data.children[0].standings.entries.map((entry) => ({
+      name: entry.team.displayName,
+      logo: entry.team.logos[0].href,
+      record: entry.stats.find(s => s.name === 'summary').displayValue,
+      winPct: entry.stats.find(s => s.name === 'winPercent').displayValue,
+      streak: entry.stats.find(s => s.name === 'streak')?.displayValue || '-',
+    })).sort((a, b) => parseFloat(a.winPct) - parseFloat(b.winPct)).slice(0, 14);
+  } catch (err) {
+    return []; // Returns empty if API is down
+  }
 }
 
-// 2. MAIN PAGE
 export default async function Home() {
   const standings = await getLiveStandings();
 
   return (
-    <div className="min-h-screen bg-[#f5f5f5] p-4 md:p-10 font-sans">
+    <div className="min-h-screen bg-[#f5f5f5] p-4 md:p-10 font-sans text-[#2f3e4e]">
       <div className="max-w-5xl mx-auto">
         
-        {/* CENTERED HEADER & BUTTONS (EXACT TANKATHON STYLE) */}
+        {/* CENTERED HEADER & BUTTONS (TANKATHON STYLE) */}
         <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-light text-[#2f3e4e] mb-8">
+          <h1 className="text-4xl md:text-5xl font-light mb-8">
             2026 NBA Draft Lottery Simulator
           </h1>
           
@@ -42,11 +45,11 @@ export default async function Home() {
           </div>
         </div>
 
-        {/* DATA TABLE */}
-        <div className="bg-white border-t-2 border-[#2f3e4e]">
+        {/* STANDINGS TABLE */}
+        <div className="bg-white border-t-2 border-[#2f3e4e] shadow-sm">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="text-[11px] font-bold text-[#2f3e4e] uppercase border-b border-[#d1d1d1]">
+              <tr className="text-[11px] font-bold uppercase border-b border-[#d1d1d1]">
                 <th className="px-4 py-3">Pick</th>
                 <th className="px-4 py-3">Team</th>
                 <th className="px-4 py-3 text-center">Record</th>
@@ -57,18 +60,18 @@ export default async function Home() {
             </thead>
             <tbody className="divide-y divide-[#f5f5f5]">
               {standings.map((team, i) => (
-                <tr key={team.name} className="hover:bg-[#fcfcfc] transition-colors">
+                <tr key={team.name} className="hover:bg-[#fcfcfc]">
                   <td className="px-4 py-3 font-medium text-[#9ea3a8]">{i + 1}</td>
                   <td className="px-4 py-3 flex items-center gap-3">
                     <img src={team.logo} className="w-6 h-6 object-contain" alt="" />
-                    <span className="font-bold text-[#2f3e4e]">{team.name}</span>
+                    <span className="font-bold">{team.name}</span>
                   </td>
                   <td className="px-4 py-3 text-center text-[#9ea3a8]">{team.record}</td>
                   <td className="px-4 py-3 text-center text-[#9ea3a8]">{team.winPct}</td>
                   <td className={`px-4 py-3 text-center font-bold ${team.streak.includes('W') ? 'text-green-600' : 'text-red-500'}`}>
                     {team.streak}
                   </td>
-                  <td className="px-4 py-3 text-right font-bold text-[#2f3e4e]">
+                  <td className="px-4 py-3 text-right font-bold">
                     {i < 3 ? '14.0%' : i === 3 ? '12.5%' : '---'}
                   </td>
                 </tr>
