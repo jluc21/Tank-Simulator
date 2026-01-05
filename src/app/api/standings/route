@@ -2,16 +2,15 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    // 1. Fetch from ESPN on the server (never blocked)
     const res = await fetch(
       'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/standings',
-      { next: { revalidate: 0 } } // Ensures fresh data
+      { cache: 'no-store' } // Ensures fresh data every time
     );
     
     if (!res.ok) throw new Error('ESPN Fetch Failed');
     const data = await res.json();
 
-    // 2. Format the data for your Tankathon-style table
+    // Mapping ESPN's raw data into the format for your simulator
     const teams = data.children[0].standings.entries.map((entry) => ({
       name: entry.team.displayName,
       logo: entry.team.logos[0].href,
@@ -20,7 +19,7 @@ export async function GET() {
       streak: entry.stats.find(s => s.name === 'streak')?.displayValue || '-',
     }));
 
-    // 3. Return the full league list sorted by win percentage
+    // Sort by win percentage (Worst to Best)
     return NextResponse.json(teams.sort((a, b) => parseFloat(a.winPct) - parseFloat(b.winPct)));
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
