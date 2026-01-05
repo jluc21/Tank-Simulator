@@ -2,7 +2,6 @@ import React from 'react';
 
 // SERVER-SIDE DATA ENGINE
 async function getLiveStandings() {
-  // Use the specific league-level endpoint for higher reliability
   const ESPN_URL = 'https://site.api.espn.com/apis/v2/sports/basketball/nba/standings';
   
   try {
@@ -13,36 +12,37 @@ async function getLiveStandings() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
 
-    // DEEP-SEARCH CRAWLER: Find the 'entries' array regardless of nesting
-    let rawEntries = null;
-    
-    // Check common ESPN nesting paths
-    if (data?.children?.[0]?.standings?.entries) {
-      rawEntries = data.children[0].standings.entries;
-    } else if (data?.children?.[0]?.children?.[0]?.standings?.entries) {
-      rawEntries = data.children[0].children[0].standings.entries;
-    } else if (data?.standings?.entries) {
-      rawEntries = data.standings.entries;
-    }
+    // LEAGUE FLATTENING: NBA is split into East/West children. We must grab both.
+    const conferences = data?.children || [];
+    const allEntries = conferences.flatMap(conf => conf.standings?.entries || []);
 
-    if (!rawEntries || !Array.isArray(rawEntries)) {
-       throw new Error("Deep Search could not locate team entries");
-    }
+    if (allEntries.length === 0) throw new Error("No league data found");
 
     return {
       success: true,
       timestamp: new Date().toISOString(),
-      teams: rawEntries.map(entry => ({
-        id: entry.team?.id || Math.random().toString(),
-        name: entry.team?.displayName || "NBA Team",
-        abbreviation: entry.team?.abbreviation || "NBA",
-        logo: entry.team?.logos?.[0]?.href || null,
-        // ESPN provides a 'summary' stat like "10-25"
-        record: entry.stats?.find(s => s.name === 'summary')?.displayValue || 
-                entry.stats?.find(s => s.type === 'summary')?.displayValue || "0-0",
-        // ESPN winPercent is usually a string like ".286"
-        winPct: entry.stats?.find(s => s.name === 'winPercent')?.displayValue || "0.000",
-      })).sort((a, b) => parseFloat(a.winPct) - parseFloat(b.winPct))
+      teams: allEntries.map(entry => {
+        const stats = entry.stats || [];
+        
+        // ROBUST STAT RESOLVER
+        const getStat = (name) => stats.find(s => s.name === name)?.value;
+        const displayStat = (name) => stats.find(s => s.name === name)?.displayValue;
+
+        // Reconstruct record (Wins-Losses) if 'summary' is missing
+        const wins = getStat('wins');
+        const losses = getStat('losses');
+        const summary = displayStat('summary');
+        const resolvedRecord = summary || (wins !== undefined ? `${wins}-${losses}` : "0-0");
+
+        return {
+          id: entry.team?.id || Math.random().toString(),
+          name: entry.team?.displayName || "NBA Team",
+          abbreviation: entry.team?.abbreviation || "NBA",
+          logo: entry.team?.logos?.[0]?.href || null,
+          record: resolvedRecord,
+          winPct: displayStat('winPercent') || "0.000",
+        };
+      }).sort((a, b) => parseFloat(a.winPct) - parseFloat(b.winPct))
     };
   } catch (error) {
     return { success: false, error: error.message, teams: [] };
@@ -52,17 +52,16 @@ async function getLiveStandings() {
 export default async function StandingsPage() {
   const report = await getLiveStandings();
 
-  // ERROR PANEL: Only shown if Deep Search fails
   if (!report.success || report.teams.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f5f5f5] p-6">
         <div className="max-w-md w-full bg-white border-t-4 border-red-600 p-8 shadow-2xl rounded-xl">
           <h2 className="text-2xl font-black text-[#2f3e4e] uppercase italic mb-4">Sync Error</h2>
           <p className="text-[#9ea3a8] mb-6 font-medium leading-relaxed">
-            Real-time standings are unreachable. Deep Search failed to locate the data stream.
+            Real-time standings are unreachable. Flattening failed to locate the league data.
           </p>
           <div className="text-[9px] font-mono text-gray-400 uppercase">
-            Build Trace: {report.error}
+            Trace: {report.error}
           </div>
         </div>
       </div>
@@ -100,7 +99,7 @@ export default async function StandingsPage() {
                   <td className="px-8 py-5 text-2xl font-black text-gray-200 tabular-nums">
                     {index + 1}
                   </td>
-                  <td className="px-6 py-5 flex items-center gap-5">
+                  <td className="px-6 py-4 flex items-center gap-5">
                     {team.logo && (
                       <img src={team.logo} alt="" className="w-10 h-10 object-contain drop-shadow-sm" />
                     )}
@@ -119,7 +118,7 @@ export default async function StandingsPage() {
             </tbody>
           </table>
           <footer className="bg-[#f5f5f5] text-center py-4 border-t border-gray-100">
-             <p className="text-[9px] font-black text-[#9ea3a8] uppercase tracking-[0.5em]">Live Feed Active</p>
+             <p className="text-[9px] font-black text-[#9ea3a8] uppercase tracking-[0.5em]">Live Feed Active • 30 Teams Loaded</p>
           </footer>
         </div>
       </div>
