@@ -95,25 +95,38 @@ export default async function StandingsPage() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {report.teams.map((team, index) => (
-                <tr key={team.id} className="hover:bg-gray-50/80 transition-all group">
-                  <td className="px-8 py-5 text-2xl font-black text-gray-200 tabular-nums">
-                    {index + 1}
-                  </td>
-                  <td className="px-6 py-4 flex items-center gap-5">
-                    {team.logo && (
-                      <img src={team.logo} alt="" className="w-10 h-10 object-contain drop-shadow-sm" />
-                    )}
-                    <span className="font-black text-xl uppercase italic group-hover:not-italic tracking-tighter">
-                      {team.name}
-                    </span>
-                  </td>
-                  <td className="px-6 py-5 text-center font-mono font-bold text-[#9ea3a8]">
-                    {team.record}
-                  </td>
-                  <td className="px-8 py-5 text-right font-black text-2xl tabular-nums">
-                    {team.winPct}
-                  </td>
-                </tr>
+                <React.Fragment key={team.id}>
+                  <tr className="hover:bg-gray-50/80 transition-all group">
+                    <td className="px-8 py-5 text-2xl font-black text-gray-200 tabular-nums">
+                      {index + 1}
+                    </td>
+                    <td className="px-6 py-5 flex items-center gap-5">
+                      {team.logo && (
+                        <img src={team.logo} alt="" className="w-10 h-10 object-contain drop-shadow-sm" />
+                      )}
+                      <span className="font-black text-xl uppercase italic group-hover:not-italic tracking-tighter">
+                        {team.name}
+                      </span>
+                    </td>
+                    <td className="px-6 py-5 text-center font-mono font-bold text-[#9ea3a8]">
+                      {team.record}
+                    </td>
+                    <td className="px-8 py-5 text-right font-black text-2xl tabular-nums">
+                      {team.winPct}
+                    </td>
+                  </tr>
+
+                  {/* DETERMINISTIC BREAK LINE: After 14th team */}
+                  {index === 13 && (
+                    <tr className="bg-gray-100/50 border-y border-gray-200">
+                      <td colSpan="4" className="py-3 text-center">
+                        <span className="text-[10px] font-black text-[#9ea3a8] uppercase tracking-[0.6em] italic">
+                          — End of Lottery —
+                        </span>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               ))}
             </tbody>
           </table>
@@ -124,4 +137,4 @@ export default async function StandingsPage() {
       </div>
     </main>
   );
-}
+} 
