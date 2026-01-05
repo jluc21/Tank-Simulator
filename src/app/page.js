@@ -116,12 +116,12 @@ export default async function StandingsPage() {
                     </td>
                   </tr>
 
-                  {/* DETERMINISTIC BREAK LINE: After 14th team */}
+                  {/* DETERMINISTIC BOUNDARY: Primary Dark Styling */}
                   {index === 13 && (
-                    <tr className="bg-gray-100/50 border-y border-gray-200">
-                      <td colSpan="4" className="py-3 text-center">
-                        <span className="text-[10px] font-black text-[#9ea3a8] uppercase tracking-[0.6em] italic">
-                          — End of Lottery —
+                    <tr className="bg-[#2f3e4e]">
+                      <td colSpan="4" className="py-4 text-center">
+                        <span className="text-[12px] font-bold text-white uppercase tracking-[0.5em]">
+                          End of Lottery
                         </span>
                       </td>
                     </tr>
@@ -137,4 +137,4 @@ export default async function StandingsPage() {
       </div>
     </main>
   );
-} 
+}
