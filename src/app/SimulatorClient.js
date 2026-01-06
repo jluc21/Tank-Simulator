@@ -54,62 +54,69 @@ export default function SimulatorClient({ initialTeams }) {
       </div>
 
       <div className="bg-white border-t-4 border-[#2f3e4e] shadow-2xl rounded-sm overflow-hidden mx-auto max-w-5xl">
-        {/* ADD: Horizontal Scroll Wrapper for Mobile Parity */}
-        <div className="overflow-x-auto touch-pan-x">
-          {/* EDIT: Applied min-width to ensure odds remain visible */}
-          <table className="w-full text-left min-w-[600px] md:min-w-full">
-            <thead>
-              <tr className="text-[10px] font-black uppercase text-[#9ea3a8] border-b border-gray-100 bg-gray-50/50">
-                <th className="w-16 px-4 py-3">Pick</th>
-                <th className="px-4 py-3">Team</th>
-                <th className="w-24 px-2 py-3 text-center">Record</th>
-                <th className="w-24 px-4 py-3 text-right">Top 4</th>
-                <th className="w-28 px-4 py-3 text-right">#1 OVR</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {standings.map((team, index) => {
-                const originalIdx = initialTeams.findIndex(t => t.id === team.id);
-                const diff = originalIdx - index;
-                return (
-                  <React.Fragment key={team.id}>
-                    <tr className="hover:bg-gray-50 transition-all group">
-                      <td className="px-4 py-3 text-2xl font-black text-[#9ea3a8] tabular-nums relative whitespace-nowrap">
-                        {index + 1}
-                        {!isAnimating && diff !== 0 && (
-                          <span className={`absolute top-1 right-1 text-[8px] font-bold ${diff > 0 ? 'text-green-500' : 'text-red-400'}`}>
-                            {diff > 0 ? `+${diff}` : diff}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 flex items-center gap-3 whitespace-nowrap">
-                        <img src={(isAnimating && index < 4) ? shuffling[index] : team.logo} alt="" className="w-7 h-7 object-contain" />
-                        <span className="font-black text-sm md:text-base uppercase italic tracking-tighter text-[#2f3e4e]">
-                          {team.name}
-                        </span>
-                      </td>
-                      <td className="px-2 py-3 text-center font-mono font-black text-[#2f3e4e] text-sm md:text-base whitespace-nowrap">
-                        {team.record}
-                      </td>
-                      <td className="px-4 py-3 text-right font-medium text-[#2f3e4e] text-sm md:text-base whitespace-nowrap">
-                        {originalIdx < 14 ? `${NBA_ODDS[originalIdx].p4.toFixed(1)}%` : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-right font-black text-lg md:text-xl text-[#2f3e4e] whitespace-nowrap">
-                        {originalIdx < 14 ? `${NBA_ODDS[originalIdx].p1.toFixed(1)}%` : '—'}
-                      </td>
-                    </tr>
-                    {index === 13 && (
-                      <tr className="bg-[#2f3e4e]">
-                        <td colSpan="5" className="py-3 text-center">
-                          <span className="text-[11px] font-bold text-white uppercase tracking-[0.5em]">End of Lottery</span>
-                        </td>
-                      </tr>
+        {/* HEADER ROW - Hidden on very small mobile, visible on sm+ */}
+        <div className="hidden sm:grid grid-cols-[3.5rem_1fr_4.5rem_4.5rem_5rem] md:grid-cols-[4rem_1fr_6rem_6rem_6rem] text-[10px] font-black uppercase text-[#9ea3a8] border-b border-gray-100 bg-gray-50/50 px-4 py-3">
+          <div>Pick</div>
+          <div>Team</div>
+          <div className="text-center">Record</div>
+          <div className="text-right">Top 4</div>
+          <div className="text-right">#1 OVR</div>
+        </div>
+
+        <div className="divide-y divide-gray-50">
+          {standings.map((team, index) => {
+            const originalIdx = initialTeams.findIndex(t => t.id === team.id);
+            const diff = originalIdx - index;
+            const top4Odds = originalIdx < 14 ? `${NBA_ODDS[originalIdx].p4.toFixed(1)}%` : '—';
+            const firstOdds = originalIdx < 14 ? `${NBA_ODDS[originalIdx].p1.toFixed(1)}%` : '—';
+
+            return (
+              <React.Fragment key={team.id}>
+                {/* RESPONSIVE ROW: Grid for Desktop, Flex for Mobile */}
+                <div className="grid grid-cols-[2.5rem_1fr_6rem] sm:grid-cols-[3.5rem_1fr_4.5rem_4.5rem_5rem] md:grid-cols-[4rem_1fr_6rem_6rem_6rem] items-center hover:bg-gray-50 transition-all group px-4 py-3 sm:py-4">
+                  
+                  {/* PICK */}
+                  <div className="text-2xl font-black text-[#9ea3a8] tabular-nums relative">
+                    {index + 1}
+                    {!isAnimating && diff !== 0 && (
+                      <span className={`absolute -top-1 -right-1 sm:top-1 sm:right-1 text-[8px] font-bold ${diff > 0 ? 'text-green-500' : 'text-red-400'}`}>
+                        {diff > 0 ? `+${diff}` : diff}
+                      </span>
                     )}
-                  </React.Fragment>
-                );
-              })}
-            </tbody>
-          </table>
+                  </div>
+
+                  {/* TEAM */}
+                  <div className="flex items-center gap-2 sm:gap-3 pl-2 sm:pl-0">
+                    <img src={(isAnimating && index < 4) ? shuffling[index] : team.logo} alt="" className="w-6 h-6 sm:w-8 sm:h-8 object-contain" />
+                    <span className="font-black text-xs sm:text-sm md:text-base uppercase italic tracking-tighter text-[#2f3e4e] leading-tight break-words">
+                      {team.name}
+                    </span>
+                  </div>
+
+                  {/* MOBILE DATA STACK (Visible only on mobile) */}
+                  <div className="sm:hidden flex flex-col items-end justify-center text-right">
+                    <div className="font-mono font-black text-[#2f3e4e] text-xs leading-none mb-1">{team.record}</div>
+                    <div className="flex gap-2 text-[9px] font-bold uppercase tracking-tighter">
+                      <span className="text-[#9ea3a8]">T4: <span className="text-[#2f3e4e]">{top4Odds}</span></span>
+                      <span className="text-[#9ea3a8]">#1: <span className="text-[#2f3e4e]">{firstOdds}</span></span>
+                    </div>
+                  </div>
+
+                  {/* DESKTOP COLUMNS (Hidden on mobile) */}
+                  <div className="hidden sm:block text-center font-mono font-black text-[#2f3e4e] text-sm">{team.record}</div>
+                  <div className="hidden sm:block text-right font-medium text-[#2f3e4e] text-sm">{top4Odds}</div>
+                  <div className="hidden sm:block text-right font-black text-lg text-[#2f3e4e]">{firstOdds}</div>
+                </div>
+
+                {/* END OF LOTTERY DIVIDER */}
+                {index === 13 && (
+                  <div className="bg-[#2f3e4e] py-3 text-center">
+                    <span className="text-[10px] sm:text-[11px] font-bold text-white uppercase tracking-[0.4em] sm:tracking-[0.6em]">End of Lottery</span>
+                  </div>
+                )}
+              </React.Fragment>
+            );
+          })}
         </div>
       </div>
     </>
