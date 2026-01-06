@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 
+// App Router Config
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET() {
   const API_URL = 'https://site.api.espn.com/apis/v2/sports/basketball/nba/draft/prospects';
@@ -11,14 +13,20 @@ export async function GET() {
       next: { revalidate: 0 }
     });
 
-    if (!res.ok) return NextResponse.json({ error: `Upstream Error: ${res.status}` }, { status: res.status });
+    if (!res.ok) {
+      return NextResponse.json({ 
+        error: `Upstream Error: ${res.status}`,
+        probe: "App Router Active" 
+      }, { status: res.status });
+    }
     
     const data = await res.json();
     const prospects = data?.prospects || [];
 
-    // Canonical Response Shape for BigBoardClient
     return NextResponse.json({
+      ok: true,
       updatedAt: new Date().toISOString(),
+      probe: "App Router Active",
       players: prospects.map(p => {
         const stats = p.statistics || [];
         const findStat = (label) => {
@@ -40,6 +48,6 @@ export async function GET() {
       })
     });
   } catch (error) {
-    return NextResponse.json({ error: "Server Fetch Failed" }, { status: 500 });
+    return NextResponse.json({ error: "Server Fetch Failed", probe: "App Router Active" }, { status: 500 });
   }
 } 
