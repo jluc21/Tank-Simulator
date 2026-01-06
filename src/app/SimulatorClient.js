@@ -1,13 +1,12 @@
 "use client";
 import React, { useState, useRef } from 'react';
 
-// 2026 NBA Weighted Lottery Odds
 const NBA_ODDS = [
-  { p1: 140, p4: 521 }, { p1: 140, p4: 521 }, { p1: 140, p4: 521 },
-  { p1: 125, p4: 481 }, { p1: 105, p4: 421 }, { p1: 90, p4: 372 },
-  { p1: 75, p4: 319 }, { p1: 60, p4: 263 }, { p1: 45, p4: 203 },
-  { p1: 30, p4: 139 }, { p1: 20, p4: 94 }, { p1: 15, p4: 71 },
-  { p1: 10, p4: 48 }, { p1: 5, p4: 24 }
+  { p1: 14.0, p4: 52.1 }, { p1: 14.0, p4: 52.1 }, { p1: 14.0, p4: 52.1 },
+  { p1: 12.5, p4: 48.1 }, { p1: 10.5, p4: 42.1 }, { p1: 9.0, p4: 37.2 },
+  { p1: 7.5, p4: 31.9 }, { p1: 6.0, p4: 26.3 }, { p1: 4.5, p4: 20.3 },
+  { p1: 3.0, p4: 13.9 }, { p1: 2.0, p4: 9.4 }, { p1: 1.5, p4: 7.1 },
+  { p1: 1.0, p4: 4.8 }, { p1: 0.5, p4: 2.4 }
 ];
 
 export default function SimulatorClient({ initialTeams, children }) {
@@ -25,13 +24,13 @@ export default function SimulatorClient({ initialTeams, children }) {
 
   const sim = () => {
     setIsAnimating(true);
-    let lotto = initialTeams.slice(0, 14).map((t, i) => ({ ...t, weight: NBA_ODDS[i].p1, origIdx: i }));
+    let lotto = initialTeams.slice(0, 14).map((t, i) => ({ ...t, weight: NBA_ODDS[i].p1, orig: i }));
     const winners = [];
     for (let i = 0; i < 4; i++) {
       const remaining = lotto.filter(p => !winners.find(w => w.id === p.id));
       winners.push(weightedDraw(remaining));
     }
-    const survivors = lotto.filter(p => !winners.find(w => w.id === p.id)).sort((a,b) => a.origIdx - b.origIdx);
+    const survivors = lotto.filter(p => !winners.find(w => w.id === p.id)).sort((a,b) => a.orig - b.orig);
     const result = [...winners, ...survivors, ...initialTeams.slice(14)];
 
     let count = 0;
