@@ -16,6 +16,7 @@ export async function GET() {
     const data = await res.json();
     const prospects = data?.prospects || [];
 
+    // Canonical Response Shape for BigBoardClient
     return NextResponse.json({
       updatedAt: new Date().toISOString(),
       players: prospects.map(p => {
