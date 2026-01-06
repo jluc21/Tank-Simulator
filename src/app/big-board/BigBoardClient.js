@@ -1,19 +1,21 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 
-export default function BigBoardClient({ initialPlayers, initialOk, initialMeta }) {
+export default function BigBoardClient({ initialPlayers, initialOk, initialMeta, initialDiag }) {
   const [players, setPlayers] = useState(initialPlayers || []);
   const [isDataOk, setIsDataOk] = useState(initialOk);
   const [meta, setMeta] = useState(initialMeta || {});
+  const [diag, setDiag] = useState(initialDiag || { tried: [] });
   const [lastUpdated, setLastUpdated] = useState("");
 
   const refreshData = async () => {
     try {
       const res = await fetch("/api/big-board", { cache: "no-store" });
-      const data = await res.json(); // Always status 200 per requirements
+      const data = await res.json();
       
       setIsDataOk(data.ok);
       setMeta({ source: data.sourceUrl, status: data.upstreamStatus });
+      setDiag(data.diagnostics);
       
       if (data.ok) {
         setPlayers(data.players);
@@ -21,9 +23,7 @@ export default function BigBoardClient({ initialPlayers, initialOk, initialMeta 
           timeZone: "America/New_York", hour: 'numeric', minute: '2-digit', second: '2-digit'
         }));
       }
-    } catch (err) {
-      console.error("Polling failed:", err);
-    }
+    } catch (err) { console.error("Discovery failed:", err); }
   };
 
   useEffect(() => {
@@ -33,12 +33,28 @@ export default function BigBoardClient({ initialPlayers, initialOk, initialMeta 
 
   if (!isDataOk && !players.length) {
     return (
-      <div className="bg-white border-t-4 border-[#2f3e4e] p-12 text-center shadow-2xl rounded-sm">
-        <h3 className="text-xl font-black uppercase italic text-[#2f3e4e] mb-2">No Big Board Data Available</h3>
-        <p className="text-[#9ea3a8] text-[10px] font-bold uppercase tracking-widest mb-6">Upstream source is currently unreachable or empty.</p>
-        <div className="bg-gray-50 p-4 rounded text-left overflow-hidden">
-          <p className="text-[8px] font-mono text-gray-400 break-all">Source: {meta.source || "None"}</p>
-          <p className="text-[8px] font-mono text-gray-400">Status: {meta.status || 0}</p>
+      <div className="bg-white border-t-4 border-[#2f3e4e] p-8 md:p-12 shadow-2xl rounded-sm">
+        <h3 className="text-xl font-black uppercase italic text-[#2f3e4e] mb-2 text-center">No Big Board Data Found</h3>
+        <p className="text-[#9ea3a8] text-[10px] font-bold uppercase tracking-widest mb-8 text-center">Discovery engine attempted 25 candidates without success.</p>
+        
+        <div className="space-y-4">
+          <div className="bg-gray-50 p-4 rounded text-left border border-gray-100">
+            <h4 className="text-[10px] font-black uppercase text-[#2f3e4e] mb-3">Discovery Logs (Top 8 Probes)</h4>
+            <ul className="space-y-1">
+              {diag.tried.slice(0, 8).map((t, i) => (
+                <li key={i} className="flex justify-between items-center text-[8px] font-mono border-b border-gray-200 pb-1">
+                  <span className="truncate max-w-[70%] text-gray-500">[{t.kind}] {t.url}</span>
+                  <span className={t.status === 200 ? 'text-green-600' : 'text-red-400'}>
+                    {t.status || t.error || 'ABORT'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="flex justify-between text-[8px] font-black uppercase text-gray-400">
+            <span>Total Probes: {diag.tried.length}</span>
+            <span>Harvested Links: {diag.foundExtractedCount}</span>
+          </div>
         </div>
       </div>
     );
@@ -48,19 +64,19 @@ export default function BigBoardClient({ initialPlayers, initialOk, initialMeta 
     <div className="bg-white border-t-4 border-[#2f3e4e] shadow-2xl rounded-sm overflow-hidden">
       {lastUpdated && (
         <div className="bg-gray-50 px-6 py-2 border-b border-gray-100 text-right">
-          <span className="text-[8px] font-bold text-[#9ea3a8] uppercase tracking-widest">Live ET: {lastUpdated}</span>
+          <span className="text-[8px] font-bold text-[#9ea3a8] uppercase tracking-widest">Live Update: {lastUpdated} ET</span>
         </div>
       )}
       <div className="overflow-x-auto">
         <table className="w-full text-left min-w-[600px]">
           <thead>
-            <tr className="text-[10px] font-black uppercase text-[#9ea3a8] border-b border-gray-100 bg-gray-50/50 px-6 py-4">
-              <th className="px-6 py-4 w-16">Rank</th>
-              <th className="px-6 py-4">Player</th>
-              <th className="px-6 py-4">School</th>
-              <th className="px-6 py-4 text-center">PPG</th>
-              <th className="px-6 py-4 text-center">RPG</th>
-              <th className="px-6 py-4 text-center">APG</th>
+            <tr className="text-[10px] font-black uppercase text-[#9ea3a8] border-b border-gray-100 bg-gray-50/50">
+              <th className="px-6 py-5 w-16">Rank</th>
+              <th className="px-6 py-5">Player</th>
+              <th className="px-6 py-5">School</th>
+              <th className="px-6 py-5 text-center">PPG</th>
+              <th className="px-6 py-5 text-center">RPG</th>
+              <th className="px-6 py-5 text-center">APG</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
