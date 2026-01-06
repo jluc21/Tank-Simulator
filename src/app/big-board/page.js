@@ -68,4 +68,4 @@ export default async function BigBoardPage() {
       </div>
     </main>
   );
-} 
+}  
