@@ -10,9 +10,17 @@ async function getLiveStandings() {
     const conferences = data?.children || [];
     const allEntries = conferences.flatMap(conf => conf.standings?.entries || []);
     if (allEntries.length === 0) throw new Error("No league data found");
+    
     return {
       success: true,
-      timestamp: new Date().toISOString(),
+      // EDIT: Generates Eastern Time string immediately
+      timestamp: new Date().toLocaleString("en-US", {
+        timeZone: "America/New_York",
+        hour: 'numeric',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      }),
       teams: allEntries.map(entry => {
         const stats = entry.stats || [];
         const getStat = (name) => stats.find(s => s.name === name)?.value;
@@ -56,7 +64,8 @@ export default async function StandingsPage() {
           <div className="flex justify-center items-center gap-2">
             <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
             <p className="text-[9px] font-black text-[#9ea3a8] uppercase tracking-[0.4em]">
-              Real-Time Sync • {new Date(report.timestamp).toLocaleTimeString()}
+              {/* EDIT: Uses the pre-formatted Eastern Time string */}
+              REAL-TIME SYNC • {report.timestamp}
             </p>
           </div>
         </header>
@@ -69,4 +78,4 @@ export default async function StandingsPage() {
       </div>
     </main>
   );
-} 
+}
