@@ -15,8 +15,8 @@ export default function SimulatorClient({ initialTeams }) {
   const [shuffling, setShuffling] = useState([null, null, null, null]);
   const timer = useRef(null);
 
-  // SHARED FONT CLASS FOR ALL NUMERIC COLUMNS
-  const numericFont = "text-[11px] md:text-base font-black tabular-nums";
+  // HARD REQUIREMENT: UNIFIED FONT SIZE FOR ALL NUMERIC DATA
+  const numericStyle = "text-[11px] md:text-base font-black tabular-nums";
 
   const weightedDraw = (pool) => {
     const total = pool.reduce((s, t) => s + t.weight, 0);
@@ -57,7 +57,6 @@ export default function SimulatorClient({ initialTeams }) {
       </div>
 
       <div className="bg-white border-t-4 border-[#2f3e4e] shadow-2xl rounded-sm overflow-hidden mx-auto max-w-5xl">
-        {/* 6-COLUMN RESPONSIVE GRID HEADER */}
         <div className="grid grid-cols-[2.4rem_1fr_3.2rem_2.4rem_3.5rem_3.8rem] md:grid-cols-[4rem_1fr_6rem_4rem_6.5rem_7rem] text-[9px] md:text-[11px] font-black uppercase text-[#9ea3a8] border-b border-gray-100 bg-gray-50/50 px-2 md:px-6 py-3">
           <div>Pick</div>
           <div>Team</div>
@@ -76,7 +75,6 @@ export default function SimulatorClient({ initialTeams }) {
               <React.Fragment key={team.id}>
                 <div className="grid grid-cols-[2.4rem_1fr_3.2rem_2.4rem_3.5rem_3.8rem] md:grid-cols-[4rem_1fr_6rem_4rem_6.5rem_7rem] items-center hover:bg-gray-50 transition-all group px-2 md:px-6 py-3 md:py-4">
                   
-                  {/* PICK NUMBER */}
                   <div className="text-xl md:text-3xl font-black text-[#9ea3a8] tabular-nums relative">
                     {index + 1}
                     {!isAnimating && diff !== 0 && (
@@ -86,7 +84,6 @@ export default function SimulatorClient({ initialTeams }) {
                     )}
                   </div>
 
-                  {/* TEAM (Responsive Abbreviations) */}
                   <div className="flex items-center gap-1 md:gap-2 overflow-hidden">
                     <img src={(isAnimating && index < 4) ? shuffling[index] : team.logo} alt="" className="w-5 h-5 md:w-8 md:h-8 object-contain shrink-0" />
                     <span className="font-black text-xs md:text-lg uppercase italic tracking-tighter text-[#2f3e4e] truncate">
@@ -95,23 +92,20 @@ export default function SimulatorClient({ initialTeams }) {
                     </span>
                   </div>
 
-                  {/* RECORD (Numeric Unification) */}
-                  <div className={`text-center font-mono text-[#2f3e4e] ${numericFont}`}>
+                  {/* NUMERIC DATA: ALL SHARING IDENTICAL SIZE */}
+                  <div className={`text-center font-mono text-[#2f3e4e] ${numericStyle}`}>
                     {team.record}
                   </div>
 
-                  {/* GB (Computed Fallback) */}
-                  <div className={`text-center font-mono text-[#9ea3a8] ${numericFont}`}>
+                  <div className={`text-center font-mono text-[#9ea3a8] ${numericStyle}`}>
                     {team.gbDisplay}
                   </div>
 
-                  {/* TOP 4 ODDS (Numeric Unification) */}
-                  <div className={`text-right text-[#2f3e4e] ${numericFont}`}>
+                  <div className={`text-right text-[#2f3e4e] ${numericStyle}`}>
                     {originalIdx < 14 ? `${NBA_ODDS[originalIdx].p4.toFixed(1)}%` : '—'}
                   </div>
 
-                  {/* #1 OVR ODDS (Numeric Unification) */}
-                  <div className={`text-right text-[#2f3e4e] ${numericFont}`}>
+                  <div className={`text-right text-[#2f3e4e] ${numericStyle}`}>
                     {originalIdx < 14 ? `${NBA_ODDS[originalIdx].p1.toFixed(1)}%` : '—'}
                   </div>
                 </div>
