@@ -15,6 +15,9 @@ export default function SimulatorClient({ initialTeams }) {
   const [shuffling, setShuffling] = useState([null, null, null, null]);
   const timer = useRef(null);
 
+  // SHARED FONT CLASS FOR ALL NUMERIC COLUMNS
+  const numericFont = "text-[11px] md:text-base font-black tabular-nums";
+
   const weightedDraw = (pool) => {
     const total = pool.reduce((s, t) => s + t.weight, 0);
     let r = Math.random() * total;
@@ -54,11 +57,12 @@ export default function SimulatorClient({ initialTeams }) {
       </div>
 
       <div className="bg-white border-t-4 border-[#2f3e4e] shadow-2xl rounded-sm overflow-hidden mx-auto max-w-5xl">
-        {/* RESPONSIVE GRID HEADER: True columns for mobile and desktop */}
-        <div className="grid grid-cols-[2.8rem_1fr_3.5rem_4rem_4.5rem] md:grid-cols-[4rem_1fr_6rem_6.5rem_7rem] text-[9px] md:text-[11px] font-black uppercase text-[#9ea3a8] border-b border-gray-100 bg-gray-50/50 px-2 md:px-6 py-3">
+        {/* 6-COLUMN RESPONSIVE GRID HEADER */}
+        <div className="grid grid-cols-[2.4rem_1fr_3.2rem_2.4rem_3.5rem_3.8rem] md:grid-cols-[4rem_1fr_6rem_4rem_6.5rem_7rem] text-[9px] md:text-[11px] font-black uppercase text-[#9ea3a8] border-b border-gray-100 bg-gray-50/50 px-2 md:px-6 py-3">
           <div>Pick</div>
           <div>Team</div>
           <div className="text-center">Rec</div>
+          <div className="text-center">GB</div>
           <div className="text-right">Top 4</div>
           <div className="text-right">#1 OVR</div>
         </div>
@@ -67,12 +71,10 @@ export default function SimulatorClient({ initialTeams }) {
           {standings.map((team, index) => {
             const originalIdx = initialTeams.findIndex(t => t.id === team.id);
             const diff = originalIdx - index;
-            // Abridged name for mobile (e.g., Indiana Pacers -> IND)
-            const mobileName = team.abbreviation || team.name.substring(0, 3).toUpperCase();
 
             return (
               <React.Fragment key={team.id}>
-                <div className="grid grid-cols-[2.8rem_1fr_3.5rem_4rem_4.5rem] md:grid-cols-[4rem_1fr_6rem_6.5rem_7rem] items-center hover:bg-gray-50 transition-all group px-2 md:px-6 py-3 md:py-4">
+                <div className="grid grid-cols-[2.4rem_1fr_3.2rem_2.4rem_3.5rem_3.8rem] md:grid-cols-[4rem_1fr_6rem_4rem_6.5rem_7rem] items-center hover:bg-gray-50 transition-all group px-2 md:px-6 py-3 md:py-4">
                   
                   {/* PICK NUMBER */}
                   <div className="text-xl md:text-3xl font-black text-[#9ea3a8] tabular-nums relative">
@@ -84,32 +86,36 @@ export default function SimulatorClient({ initialTeams }) {
                     )}
                   </div>
 
-                  {/* TEAM (Abbreviated on mobile) */}
-                  <div className="flex items-center gap-2 overflow-hidden">
+                  {/* TEAM (Responsive Abbreviations) */}
+                  <div className="flex items-center gap-1 md:gap-2 overflow-hidden">
                     <img src={(isAnimating && index < 4) ? shuffling[index] : team.logo} alt="" className="w-5 h-5 md:w-8 md:h-8 object-contain shrink-0" />
                     <span className="font-black text-xs md:text-lg uppercase italic tracking-tighter text-[#2f3e4e] truncate">
-                      <span className="md:hidden">{mobileName}</span>
+                      <span className="md:hidden">{team.abbreviation}</span>
                       <span className="hidden md:inline">{team.name}</span>
                     </span>
                   </div>
 
-                  {/* RECORD (Unified font size) */}
-                  <div className="text-center font-mono font-black text-[#2f3e4e] text-[11px] md:text-base whitespace-nowrap">
+                  {/* RECORD (Numeric Unification) */}
+                  <div className={`text-center font-mono text-[#2f3e4e] ${numericFont}`}>
                     {team.record}
                   </div>
 
-                  {/* TOP 4 ODDS (Unified font size) */}
-                  <div className="text-right font-black text-[#2f3e4e] text-[11px] md:text-base tabular-nums">
+                  {/* GB (Computed Fallback) */}
+                  <div className={`text-center font-mono text-[#9ea3a8] ${numericFont}`}>
+                    {team.gbDisplay}
+                  </div>
+
+                  {/* TOP 4 ODDS (Numeric Unification) */}
+                  <div className={`text-right text-[#2f3e4e] ${numericFont}`}>
                     {originalIdx < 14 ? `${NBA_ODDS[originalIdx].p4.toFixed(1)}%` : '—'}
                   </div>
 
-                  {/* #1 OVR ODDS (Unified font size) */}
-                  <div className="text-right font-black text-[#2f3e4e] text-xs md:text-xl tabular-nums">
+                  {/* #1 OVR ODDS (Numeric Unification) */}
+                  <div className={`text-right text-[#2f3e4e] ${numericFont}`}>
                     {originalIdx < 14 ? `${NBA_ODDS[originalIdx].p1.toFixed(1)}%` : '—'}
                   </div>
                 </div>
 
-                {/* BOUNDARY DIVIDER */}
                 {index === 13 && (
                   <div className="bg-[#2f3e4e] py-3 text-center">
                     <span className="text-[10px] md:text-[11px] font-bold text-white uppercase tracking-[0.6em]">End of Lottery</span>
