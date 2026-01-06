@@ -9,7 +9,7 @@ export default function BigBoardClient({ initialPlayers, fetchError }) {
   useEffect(() => {
     const refreshData = async () => {
       try {
-        // FIXED: Fetching from the newly created API route
+        // Fetching from the new API route created above
         const res = await fetch("/api/big-board", { cache: "no-store" });
         if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
         
@@ -29,7 +29,7 @@ export default function BigBoardClient({ initialPlayers, fetchError }) {
       }
     };
 
-    const interval = setInterval(refreshData, 30000);
+    const interval = setInterval(refreshData, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
   }, []);
 
@@ -40,7 +40,7 @@ export default function BigBoardClient({ initialPlayers, fetchError }) {
         <p className="text-[#9ea3a8] text-xs font-bold uppercase tracking-widest">{error}</p>
         <button 
           onClick={() => window.location.reload()}
-          className="mt-6 bg-[#2f3e4e] text-white px-8 py-2 rounded font-black uppercase text-[10px] tracking-[0.2em] hover:bg-black"
+          className="mt-6 bg-[#2f3e4e] text-white px-8 py-2 rounded font-black uppercase text-[10px] tracking-[0.2em] hover:bg-black transition-all"
         >
           Retry Connection
         </button>
@@ -77,7 +77,7 @@ export default function BigBoardClient({ initialPlayers, fetchError }) {
                   {p.image ? (
                     <img src={p.image} alt="" className="w-10 h-10 rounded-full bg-gray-100 object-cover" />
                   ) : (
-                    <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-[8px] font-bold text-gray-300">N/A</div>
+                    <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-[8px] font-bold text-gray-300">N/A</div>
                   )}
                   <div>
                     <div className="font-black text-base uppercase italic text-[#2f3e4e] leading-none">{p.name}</div>
