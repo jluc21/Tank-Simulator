@@ -10,30 +10,48 @@ async function getLiveStandings() {
     const conferences = data?.children || [];
     const allEntries = conferences.flatMap(conf => conf.standings?.entries || []);
     if (allEntries.length === 0) throw new Error("No league data found");
-    
+
+    // Map initial data and extract numeric wins/losses for GB calculation
+    const rawTeams = allEntries.map(entry => {
+      const stats = entry.stats || [];
+      const getStat = (name) => stats.find(s => s.name === name)?.value;
+      const displayStat = (name) => stats.find(s => s.name === name)?.displayValue;
+      
+      return {
+        id: entry.team?.id || Math.random().toString(),
+        name: entry.team?.displayName || "NBA Team",
+        abbreviation: entry.team?.abbreviation || entry.team?.displayName?.substring(0,3).toUpperCase(),
+        logo: entry.team?.logos?.[0]?.href || null,
+        record: displayStat('summary') || `${getStat('wins') || 0}-${getStat('losses') || 0}`,
+        winPct: displayStat('winPercent') || "0.000",
+        wins: getStat('wins') || 0,
+        losses: getStat('losses') || 0,
+        gb: getStat('gamesBehind') // Primary GB source from ESPN
+      };
+    }).sort((a, b) => parseFloat(a.winPct) - parseFloat(b.winPct));
+
+    // Fallback GB Computation Logic
+    // Leader is the team with the BEST record (last in our sorted lottery list)
+    const leader = rawTeams[rawTeams.length - 1];
+    const finalTeams = rawTeams.map(t => {
+      let val = t.gb;
+      if (val === undefined || val === null) {
+        // Compute: ((leaderWins - teamWins) + (teamLosses - leaderLosses)) / 2
+        val = ((leader.wins - t.wins) + (t.losses - leader.losses)) / 2;
+      }
+      return {
+        ...t,
+        gbDisplay: parseFloat(val) === 0 ? "--" : parseFloat(val).toFixed(1)
+      };
+    });
+
     return {
       success: true,
-      // EDIT: Generates Eastern Time string immediately
       timestamp: new Date().toLocaleString("en-US", {
         timeZone: "America/New_York",
-        hour: 'numeric',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: true
+        hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true
       }),
-      teams: allEntries.map(entry => {
-        const stats = entry.stats || [];
-        const getStat = (name) => stats.find(s => s.name === name)?.value;
-        const displayStat = (name) => stats.find(s => s.name === name)?.displayValue;
-        const summary = displayStat('summary');
-        return {
-          id: entry.team?.id || Math.random().toString(),
-          name: entry.team?.displayName || "NBA Team",
-          logo: entry.team?.logos?.[0]?.href || null,
-          record: summary || `${getStat('wins') || 0}-${getStat('losses') || 0}`,
-          winPct: displayStat('winPercent') || "0.000",
-        };
-      }).sort((a, b) => parseFloat(a.winPct) - parseFloat(b.winPct))
+      teams: finalTeams
     };
   } catch (error) {
     return { success: false, error: error.message, teams: [] };
@@ -42,7 +60,6 @@ async function getLiveStandings() {
 
 export default async function StandingsPage() {
   const report = await getLiveStandings();
-
   if (!report.success || report.teams.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f5f5f5] p-6">
@@ -64,18 +81,15 @@ export default async function StandingsPage() {
           <div className="flex justify-center items-center gap-2">
             <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
             <p className="text-[9px] font-black text-[#9ea3a8] uppercase tracking-[0.4em]">
-              {/* EDIT: Uses the pre-formatted Eastern Time string */}
               REAL-TIME SYNC • {report.timestamp}
             </p>
           </div>
         </header>
-
         <SimulatorClient initialTeams={report.teams} />
-
         <footer className="mt-8 text-center py-4 border-t border-gray-100">
            <p className="text-[9px] font-black text-[#9ea3a8] uppercase tracking-[0.5em]">Live Feed Active • 30 Teams Loaded</p>
         </footer>
       </div>
     </main>
   );
-}
+} 
