@@ -1,19 +1,25 @@
 import React from 'react';
 import BigBoardClient from './BigBoardClient';
 
+export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 async function getBigBoardData() {
-  // Logic to load local JSON directly for initial server render
-  const players = require('../../data/bigboard.json');
-  return {
-    success: true,
-    timestamp: new Date().toLocaleString("en-US", {
-      timeZone: "America/New_York",
-      hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true
-    }),
-    players
-  };
+  try {
+    // Attempt to load the local data first
+    const players = require('../../data/bigboard.json');
+    return {
+      success: true,
+      timestamp: new Date().toLocaleString("en-US", {
+        timeZone: "America/New_York",
+        hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true
+      }),
+      players: players || []
+    };
+  } catch (error) {
+    console.error("Server data load error:", error);
+    return { success: false, players: [], error: error.message };
+  }
 }
 
 export default async function BigBoardPage() {
@@ -27,14 +33,11 @@ export default async function BigBoardPage() {
             2026 NBA BIG BOARD
           </h1>
           <p className="text-[10px] font-black text-[#9ea3a8] uppercase tracking-[0.4em]">
-            LAST UPDATED • {data.timestamp} ET
+            LAST UPDATED • {data.timestamp || "SYNCING"} ET
           </p>
         </header>
-        <BigBoardClient 
-          initialPlayers={data.players} 
-          initialOk={true} 
-          initialUpdatedAt={data.timestamp} 
-        />
+        {/* Pass consistent players prop */}
+        <BigBoardClient players={data.players} />
       </div>
     </main>
   );
