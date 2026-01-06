@@ -1,27 +1,29 @@
-// Locate the 'return (' block inside export default async function StandingsPage()
-// Replace everything from <main> down to </main> with this:
+import { NextResponse } from 'next/server';
 
-  return (
-    <main className="min-h-screen bg-[#f5f5f5] p-6 md:p-12 font-sans text-[#2f3e4e]">
-      <div className="max-w-5xl mx-auto">
-        <header className="text-center mb-16">
-          <h1 className="text-5xl md:text-7xl font-black uppercase italic tracking-tighter mb-4">
-            2026 NBA Lottery Simulator
-          </h1>
-          <div className="flex justify-center items-center gap-2">
-            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            <p className="text-[10px] font-black text-[#9ea3a8] uppercase tracking-[0.4em]">
-              Real-Time Sync • {new Date(report.timestamp).toLocaleTimeString()}
-            </p>
-          </div>
-        </header>
+export async function GET() {
+  try {
+    const res = await fetch(
+      'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/standings',
+      { cache: 'no-store' } // Ensures fresh data every time
+    );
+    
+    if (!res.ok) throw new Error('ESPN Fetch Failed');
+    const data = await res.json();
 
-        {/* ADDED: Interactive Simulator Layer */}
-        <SimulatorClient initialTeams={report.teams} timestamp={report.timestamp} />
+    // Mapping ESPN's raw data into the format for your simulator
+    const teams = data.children[0].standings.entries.map((entry) => ({
+      name: entry.team.displayName,
+      logo: entry.team.logos[0].href,
+      record: entry.stats.find(s => s.name === 'summary')?.displayValue || '0-0',
+      winPct: entry.stats.find(s => s.name === 'winPercent')?.displayValue || '.000',
+      streak: entry.stats.find(s => s.name === 'streak')?.displayValue || '-',
+    }));
 
-        <footer className="mt-10 text-center">
-           <p className="text-[9px] font-black text-[#9ea3a8] uppercase tracking-[0.5em]">Live Feed Active • 30 Teams Loaded</p>
-        </footer>
-      </div>
-    </main>
-  );
+    // Sort by win percentage (Worst to Best)
+    return NextResponse.json(teams.sort((a, b) => parseFloat(a.winPct) - parseFloat(b.winPct)));
+  } catch (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+
