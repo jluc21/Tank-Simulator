@@ -9,7 +9,7 @@ export default function BigBoardClient({ initialPlayers, fetchError }) {
   useEffect(() => {
     const refreshData = async () => {
       try {
-        // Fetching from the new API route created above
+        // EXACT PATH MATCH: /api/big-board
         const res = await fetch("/api/big-board", { cache: "no-store" });
         if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
         
@@ -29,7 +29,7 @@ export default function BigBoardClient({ initialPlayers, fetchError }) {
       }
     };
 
-    const interval = setInterval(refreshData, 30000); // Refresh every 30 seconds
+    const interval = setInterval(refreshData, 30000);
     return () => clearInterval(interval);
   }, []);
 
