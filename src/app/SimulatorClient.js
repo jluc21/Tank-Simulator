@@ -46,22 +46,22 @@ export default function SimulatorClient({ initialTeams }) {
 
   return (
     <>
-      <div className="flex justify-center gap-4 mb-12">
-        <button onClick={simLottery} disabled={isAnimating} className="bg-[#2f3e4e] text-white px-10 py-3 rounded font-black uppercase tracking-widest shadow-xl transition-all active:scale-95 disabled:opacity-50 hover:bg-black">
+      <div className="flex justify-center gap-4 mb-10">
+        <button onClick={simLottery} disabled={isAnimating} className="bg-[#2f3e4e] text-white px-10 py-4 rounded font-black uppercase tracking-widest shadow-xl transition-all active:scale-95 disabled:opacity-50 hover:bg-black">
           {isAnimating ? "Drawing..." : "Sim Lottery"}
         </button>
-        <button onClick={() => setStandings(initialTeams)} className="bg-[#9ea3a8] text-white px-10 py-3 rounded font-black uppercase tracking-widest shadow-md">Reset</button>
+        <button onClick={() => setStandings(initialTeams)} className="bg-[#9ea3a8] text-white px-10 py-4 rounded font-black uppercase tracking-widest shadow-md">Reset</button>
       </div>
 
       <div className="bg-white border-t-4 border-[#2f3e4e] shadow-2xl rounded-sm overflow-hidden">
         <table className="w-full text-left table-fixed">
           <thead>
-            <tr className="text-[11px] font-black uppercase text-[#9ea3a8] border-b border-gray-100 bg-gray-50/50">
-              <th className="w-20 px-6 py-4">Pick</th>
-              <th className="px-6 py-4">Team</th>
-              <th className="w-32 px-6 py-4 text-center">Record</th>
-              <th className="w-24 px-6 py-4 text-right">Top 4</th>
-              <th className="w-28 px-6 py-4 text-right">#1 OVR</th>
+            <tr className="text-[10px] font-black uppercase text-[#9ea3a8] border-b border-gray-100 bg-gray-50/50">
+              <th className="w-16 px-4 py-3">Pick</th>
+              <th className="px-4 py-3">Team</th>
+              <th className="w-24 px-4 py-3 text-center">Record</th>
+              <th className="w-24 px-4 py-3 text-right">Top 4</th>
+              <th className="w-24 px-4 py-3 text-right">#1 OVR</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -70,24 +70,26 @@ export default function SimulatorClient({ initialTeams }) {
               const diff = originalIdx - index;
               return (
                 <React.Fragment key={team.id}>
-                  <tr className="hover:bg-gray-50/80 transition-all group">
-                    <td className="px-6 py-4 text-3xl font-black text-gray-100 tabular-nums relative">
+                  <tr className="hover:bg-gray-50 transition-all group">
+                    {/* EDIT: Updated color to brand gray [#9ea3a8] for contrast */}
+                    <td className="px-4 py-3 text-2xl font-black text-[#9ea3a8] tabular-nums relative">
                       {index + 1}
                       {!isAnimating && diff !== 0 && (
-                        <span className={`absolute top-2 right-2 text-[9px] font-bold ${diff > 0 ? 'text-green-500' : 'text-red-400'}`}>
+                        <span className={`absolute top-1 right-1 text-[8px] font-bold ${diff > 0 ? 'text-green-500' : 'text-red-400'}`}>
                           {diff > 0 ? `+${diff}` : diff}
                         </span>
                       )}
                     </td>
-                    <td className="px-6 py-4 flex items-center gap-4">
-                      <img src={(isAnimating && index < 4) ? shuffling[index] : team.logo} alt="" className="w-8 h-8 object-contain" />
-                      <span className="font-black text-lg uppercase italic tracking-tighter text-[#2f3e4e]">{team.name}</span>
+                    <td className="px-4 py-3 flex items-center gap-3">
+                      <img src={(isAnimating && index < 4) ? shuffling[index] : team.logo} alt="" className="w-7 h-7 object-contain" />
+                      <span className="font-black text-base uppercase italic tracking-tighter text-[#2f3e4e]">{team.name}</span>
                     </td>
-                    <td className="px-6 py-4 text-center font-mono font-bold text-[#9ea3a8]">{team.record}</td>
-                    <td className="px-6 py-4 text-right font-bold text-gray-300">
+                    <td className="px-4 py-3 text-center font-mono font-bold text-[#9ea3a8] text-xs">{team.record}</td>
+                    {/* EDIT: Updated color to brand slate [#2f3e4e] for readability */}
+                    <td className="px-4 py-3 text-right font-medium text-[#2f3e4e] text-sm">
                       {originalIdx < 14 ? `${NBA_ODDS[originalIdx].p4.toFixed(1)}%` : '—'}
                     </td>
-                    <td className="px-6 py-4 text-right font-black text-xl text-[#2f3e4e]">
+                    <td className="px-4 py-3 text-right font-black text-lg text-[#2f3e4e]">
                       {originalIdx < 14 ? `${NBA_ODDS[originalIdx].p1.toFixed(1)}%` : '—'}
                     </td>
                   </tr>
