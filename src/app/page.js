@@ -1,5 +1,15 @@
-// Inside async function getLiveStandings()
-// Replace the mapping and sorting logic block with this:
+import React from 'react';
+import SimulatorClient from './SimulatorClient';
+
+async function getLiveStandings() {
+  const ESPN_URL = 'https://site.api.espn.com/apis/v2/sports/basketball/nba/standings';
+  try {
+    const res = await fetch(ESPN_URL, { next: { revalidate: 3600 } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const conferences = data?.children || [];
+    const allEntries = conferences.flatMap(conf => conf.standings?.entries || []);
+    if (allEntries.length === 0) throw new Error("No league data found");
 
     const rawTeams = allEntries.map(entry => {
       const stats = entry.stats || [];
@@ -16,12 +26,12 @@
         wins: getStat('wins') || 0,
         losses: getStat('losses') || 0
       };
-    }).sort((a, b) => parseFloat(a.winPct) - parseFloat(b.winPct)); // Sorted Worst-to-Best
+    }).sort((a, b) => parseFloat(a.winPct) - parseFloat(b.winPct));
 
     // TANKATHON GB LOGIC: Leader is the WORST team (Pick #1)
-    const lotteryLeader = rawTeams[0]; // Lowest winPct team
+    const lotteryLeader = rawTeams[0]; 
     const finalTeams = rawTeams.map(t => {
-      // GB = ((teamW - leaderW) + (leaderL - teamL)) / 2
+      // GB = ((teamWins - leaderW) + (leaderL - teamL)) / 2
       const gbVal = ((t.wins - lotteryLeader.wins) + (lotteryLeader.losses - t.losses)) / 2;
       return {
         ...t,
@@ -37,3 +47,43 @@
       }),
       teams: finalTeams
     };
+  } catch (error) {
+    return { success: false, error: error.message, teams: [] };
+  }
+}
+
+export default async function StandingsPage() {
+  const report = await getLiveStandings();
+  if (!report.success || report.teams.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f5f5f5] p-6">
+        <div className="max-w-md w-full bg-white border-t-4 border-red-600 p-8 shadow-2xl rounded-xl">
+          <h2 className="text-2xl font-black text-[#2f3e4e] uppercase italic mb-4">Sync Error</h2>
+          <p className="text-[#9ea3a8] mb-6 font-medium">Real-time standings are unreachable.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-[#f5f5f5] p-4 md:p-8 font-sans text-[#2f3e4e]">
+      <div className="max-w-5xl mx-auto">
+        <header className="text-center mb-8">
+          <h1 className="text-4xl md:text-6xl font-black uppercase italic tracking-tighter mb-2 text-[#2f3e4e]">
+            2026 NBA Lottery Simulator
+          </h1>
+          <div className="flex justify-center items-center gap-2">
+            <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+            <p className="text-[9px] font-black text-[#9ea3a8] uppercase tracking-[0.4em]">
+              REAL-TIME SYNC • {report.timestamp}
+            </p>
+          </div>
+        </header>
+        <SimulatorClient initialTeams={report.teams} />
+        <footer className="mt-8 text-center py-4 border-t border-gray-100">
+           <p className="text-[9px] font-black text-[#9ea3a8] uppercase tracking-[0.5em]">Live Feed Active • 30 Teams Loaded</p>
+        </footer>
+      </div>
+    </main>
+  );
+} 
