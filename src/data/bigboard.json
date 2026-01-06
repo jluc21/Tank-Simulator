@@ -1,18 +1,53 @@
-[
-  { 
-    "id": "1", 
-    "rank": 1, 
-    "name": "Darryn Peterson", 
-    "position": "G", 
-    "school": "Kansas", 
-    "athleteId": "5176185" 
-  },
-  { 
-    "id": "2", 
-    "rank": 2, 
-    "name": "Cameron Boozer", 
-    "position": "F", 
-    "school": "Duke", 
-    "athleteId": "5106191" 
+import { NextResponse } from 'next/server';
+import bigboardData from '@/data/bigboard_2026.json';
+
+// Server-side in-memory cache
+const cache = new Map();
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
+export async function GET(request) {
+  const { searchParams } = new URL(request.url);
+  const debug = searchParams.get('debug') === '1';
+
+  try {
+    const enrichedPlayers = await Promise.all(bigboardData.map(async (player) => {
+      if (!player.athleteId) {
+        return { ...player, image: null, ppg: "—", rpg: "—", apg: "—", debugStatus: "no_id" };
+      }
+
+      // Check Cache
+      const cached = cache.get(player.athleteId);
+      if (cached && (Date.now() - cached.ts < CACHE_TTL)) return cached.data;
+
+      try {
+        // Deterministic Athlete Detail Endpoint
+        const url = `https://site.web.api.espn.com/apis/common/v3/sports/basketball/mens-college-basketball/athletes/${player.athleteId}`;
+        const res = await fetch(url, { next: { revalidate: 1800 } });
+        const data = await res.json();
+        const athlete = data.athlete;
+
+        // Extract Stats from ESPN's statsSummary structure
+        const stats = athlete.statsSummary?.statistics || [];
+        const findStat = (abbrev) => stats.find(s => s.abbreviation === abbrev)?.displayValue || "—";
+
+        const result = {
+          ...player,
+          image: athlete.headshot?.href || null,
+          ppg: findStat('PTS'),
+          rpg: findStat('REB'),
+          apg: findStat('AST'),
+          debug: debug ? { keys: Object.keys(data), athleteKeys: Object.keys(athlete) } : undefined
+        };
+
+        cache.set(player.athleteId, { ts: Date.now(), data: result });
+        return result;
+      } catch (e) {
+        return { ...player, image: null, ppg: "—", rpg: "—", apg: "—", debugStatus: "fetch_error" };
+      }
+    }));
+
+    return NextResponse.json(enrichedPlayers);
+  } catch (error) {
+    return NextResponse.json({ ok: false, players: [], error: error.message }, { status: 200 });
   }
-]
+} 
