@@ -1,7 +1,6 @@
 import React from 'react';
 import SimulatorClient from './SimulatorClient';
 
-// SERVER-SIDE DATA ENGINE (Master Code - Do Not Change)
 async function getLiveStandings() {
   const ESPN_URL = 'https://site.api.espn.com/apis/v2/sports/basketball/nba/standings';
   try {
@@ -41,8 +40,7 @@ export default async function StandingsPage() {
       <div className="min-h-screen flex items-center justify-center bg-[#f5f5f5] p-6">
         <div className="max-w-md w-full bg-white border-t-4 border-red-600 p-8 shadow-2xl rounded-xl">
           <h2 className="text-2xl font-black text-[#2f3e4e] uppercase italic mb-4">Sync Error</h2>
-          <p className="text-[#9ea3a8] mb-6 font-medium leading-relaxed">Real-time standings are unreachable.</p>
-          <div className="text-[9px] font-mono text-gray-400 uppercase">Trace: {report.error}</div>
+          <p className="text-[#9ea3a8] mb-6 font-medium">Real-time standings are unreachable.</p>
         </div>
       </div>
     );
@@ -65,7 +63,7 @@ export default async function StandingsPage() {
 
         <SimulatorClient initialTeams={report.teams} />
 
-        <footer className="bg-[#f5f5f5] text-center py-4 mt-8 border-t border-gray-100">
+        <footer className="mt-8 text-center py-4 border-t border-gray-100">
            <p className="text-[9px] font-black text-[#9ea3a8] uppercase tracking-[0.5em]">Live Feed Active • 30 Teams Loaded</p>
         </footer>
       </div>
